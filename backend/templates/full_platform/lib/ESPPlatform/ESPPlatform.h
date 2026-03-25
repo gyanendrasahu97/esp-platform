@@ -10,8 +10,8 @@ struct UiControl {
     String action;  // for switch / button / slider
     String key;     // for sensor / gauge
     String unit;
-    float  min = 0;
-    float  max = 100;
+    float  min;
+    float  max;
 };
 
 // ── ESPPlatform facade ─────────────────────────────────────────────────────────
