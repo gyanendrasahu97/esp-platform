@@ -1,14 +1,3 @@
-/// <reference types="react" />
-
-// ESP Web Tools custom element type declaration
-declare namespace JSX {
-  interface IntrinsicElements {
-    'esp-web-install-button': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
-      manifest?: string
-    }, HTMLElement>
-  }
-}
-
 interface Props {
   binUrl: string | null
   buildId: string | null
