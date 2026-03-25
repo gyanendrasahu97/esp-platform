@@ -21,8 +21,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    logger.info("Starting ESP Platform backend...")
+    # Startup — must call mqtt.connection() explicitly because fastapi_mqtt
+    # uses @app.on_event("startup") internally, which is skipped when lifespan= is set
+    await mqtt.connection()
+    logger.info("ESP Platform backend started, MQTT connected")
     yield
     # Shutdown
     logger.info("Shutting down...")
