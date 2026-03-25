@@ -20,7 +20,7 @@ router = APIRouter(prefix="/compiler", tags=["compiler"])
 class BuildRequest(BaseModel):
     source_code: str
     board: str = "esp32dev"
-    template: str = "basic"
+    template_id: str | None = None  # if set, copies all template files into workspace
 
 
 class BuildResult(BaseModel):
@@ -53,6 +53,7 @@ async def build_firmware(
     result = await compiler_service.compile(
         source_code=body.source_code,
         board=body.board,
+        template_id=body.template_id,
     )
 
     firmware_id = None

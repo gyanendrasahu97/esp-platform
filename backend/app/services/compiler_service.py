@@ -69,18 +69,31 @@ class CompilerService:
             return main_cpp.read_text()
         return None
 
-    async def compile(self, source_code: str, board: str = "esp32dev") -> dict:
+    async def compile(self, source_code: str, board: str = "esp32dev", template_id: str | None = None) -> dict:
         build_id = str(uuid4())
         workspace = Path(settings.pio_workspace) / build_id
         workspace.mkdir(parents=True, exist_ok=True)
 
-        # Write platformio.ini
-        ini_content = PLATFORMIO_INI_TEMPLATE.format(board=board)
-        (workspace / "platformio.ini").write_text(ini_content)
-
-        # Write source code
         src_dir = workspace / "src"
         src_dir.mkdir(exist_ok=True)
+
+        # If a multi-file template exists, copy all its files first
+        template_dir = TEMPLATES_DIR / template_id if template_id else None
+        if template_dir and template_dir.exists():
+            template_src = template_dir / "src"
+            if template_src.exists():
+                for f in template_src.iterdir():
+                    if f.is_file():
+                        shutil.copy2(f, src_dir / f.name)
+            template_ini = template_dir / "platformio.ini"
+            if template_ini.exists():
+                shutil.copy2(template_ini, workspace / "platformio.ini")
+            else:
+                (workspace / "platformio.ini").write_text(PLATFORMIO_INI_TEMPLATE.format(board=board))
+        else:
+            (workspace / "platformio.ini").write_text(PLATFORMIO_INI_TEMPLATE.format(board=board))
+
+        # Always write (or overwrite) main.cpp with the user's edited code
         (src_dir / "main.cpp").write_text(source_code)
 
         output_lines = []

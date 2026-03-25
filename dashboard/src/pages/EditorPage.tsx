@@ -7,20 +7,28 @@ import FlashOta from '../components/editor/FlashOta'
 import api from '../api/client'
 import type { BuildResult, Template } from '../types'
 
-const DEFAULT_CODE = `// ESP Platform - New Sketch
+const DEFAULT_CODE = `// ESP Platform - Full Platform Firmware (main.cpp)
+// All other files (WiFi, MQTT, BLE, OTA, offline buffer) are included automatically.
+// Edit this file to customize sensors, controls, or behavior.
+// Build → Flash USB (browser) or Flash OTA (over WiFi).
+
 #include <Arduino.h>
+#include <Preferences.h>
+#include <ArduinoJson.h>
+#include <HTTPClient.h>
 
-void setup() {
-  Serial.begin(115200);
-  pinMode(2, OUTPUT);
-}
+#include "config.h"
+#include "wifi_manager.h"
+#include "mqtt_client.h"
+#include "sensor_manager.h"
+#include "control_handler.h"
+#include "ota_manager.h"
+#include "offline_buffer.h"
+#include "ble_provisioning.h"
+#include "ui_descriptor.h"
 
-void loop() {
-  digitalWrite(2, HIGH);
-  delay(1000);
-  digitalWrite(2, LOW);
-  delay(1000);
-}
+// ---- load full platform main from template ----
+// (This file is replaced by the template's main.cpp on build)
 `
 
 export default function EditorPage() {
@@ -33,7 +41,9 @@ export default function EditorPage() {
   const outputRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    // Load templates and auto-load full_platform main.cpp
     api.get<Template[]>('/compiler/templates').then(r => setTemplates(r.data))
+    api.get<{ code: string }>('/compiler/templates/full_platform').then(r => setCode(r.data.code)).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -59,6 +69,7 @@ export default function EditorPage() {
       const { data } = await api.post<BuildResult>('/compiler/build', {
         source_code: code,
         board,
+        template_id: 'full_platform',
       })
       setBuildResult(data)
       setOutput(data.output)
