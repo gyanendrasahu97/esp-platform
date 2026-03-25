@@ -113,24 +113,30 @@ async def cleanup_build(build_id: str, current_user: User = Depends(get_current_
 
 @router.get("/manifest/{build_id}")
 async def get_manifest(build_id: str):
-    """ESP Web Tools manifest for USB flashing."""
-    bin_url = f"/api/compiler/build/{build_id}/firmware.bin"
+    """ESP Web Tools manifest for USB flashing — includes bootloader, partitions, and app."""
+    base = f"/api/compiler/build/{build_id}"
+    storage = Path(settings.ota_storage_path) / "builds" / build_id
+    parts = []
+    # Bootloader (0x1000) and partition table (0x8000) only if present
+    if (storage / "bootloader.bin").exists():
+        parts.append({"path": f"{base}/bootloader.bin", "offset": 0x1000})
+    if (storage / "partitions.bin").exists():
+        parts.append({"path": f"{base}/partitions.bin", "offset": 0x8000})
+    parts.append({"path": f"{base}/firmware.bin", "offset": 0x10000})
     manifest = {
         "name": "ESP Platform Custom Firmware",
-        "builds": [
-            {
-                "chipFamily": "ESP32",
-                "parts": [{"path": bin_url, "offset": 0x10000}]
-            }
-        ]
+        "builds": [{"chipFamily": "ESP32", "parts": parts}]
     }
     return JSONResponse(manifest)
 
 
-@router.get("/build/{build_id}/firmware.bin")
-async def download_build(build_id: str):
-    """Serve compiled firmware binary for ESP Web Tools."""
-    bin_path = Path(settings.ota_storage_path) / "builds" / build_id / "firmware.bin"
-    if not bin_path.exists():
-        raise HTTPException(status_code=404, detail="Build not found")
-    return FileResponse(str(bin_path), filename="firmware.bin", media_type="application/octet-stream")
+@router.get("/build/{build_id}/{filename}")
+async def download_build_file(build_id: str, filename: str):
+    """Serve compiled firmware files (firmware.bin, bootloader.bin, partitions.bin)."""
+    allowed = {"firmware.bin", "bootloader.bin", "partitions.bin"}
+    if filename not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid file")
+    file_path = Path(settings.ota_storage_path) / "builds" / build_id / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(str(file_path), filename=filename, media_type="application/octet-stream")

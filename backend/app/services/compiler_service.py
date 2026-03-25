@@ -147,13 +147,18 @@ class CompilerService:
 
         bin_url = None
         if success:
-            bin_path = workspace / ".pio" / "build" / board / "firmware.bin"
+            pio_out = workspace / ".pio" / "build" / board
+            bin_path = pio_out / "firmware.bin"
             if bin_path.exists():
-                # Move to firmware storage
+                # Copy app + bootloader + partition table to firmware storage
                 storage = Path(settings.ota_storage_path) / "builds" / build_id
                 storage.mkdir(parents=True, exist_ok=True)
-                final_bin = storage / "firmware.bin"
-                shutil.copy2(bin_path, final_bin)
+                shutil.copy2(bin_path, storage / "firmware.bin")
+                # Bootloader and partitions are needed for ESP Web Tools USB flash
+                for extra in ("bootloader.bin", "partitions.bin"):
+                    src = pio_out / extra
+                    if src.exists():
+                        shutil.copy2(src, storage / extra)
                 bin_url = f"/api/ota/build/{build_id}/firmware.bin"
 
         return {
