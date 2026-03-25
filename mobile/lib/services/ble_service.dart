@@ -37,10 +37,19 @@ class BleService extends ChangeNotifier {
 
     _scanSub = _ble
         .scanForDevices(
-          withServices: [Uuid.parse(_serviceUuid)],
+          // Don't filter by service UUID — Android hardware filter is unreliable
+          // with 128-bit custom UUIDs from NimBLE. Filter by name/UUID in listener.
+          withServices: [],
           scanMode: ScanMode.lowLatency,
         )
         .listen((device) {
+          // Accept devices that expose our service UUID OR have "ESP"/"platform" in name
+          final isOurs = device.serviceUuids
+              .any((u) => u.toString().toLowerCase() == _serviceUuid.toLowerCase());
+          final nameMatch = device.name.toLowerCase().contains('esp') ||
+              device.name.toLowerCase().contains('platform');
+          if (!isOurs && !nameMatch) return;
+
           if (!discovered.any((d) => d.id == device.id)) {
             discovered.add(BleDevice(
               id: device.id,

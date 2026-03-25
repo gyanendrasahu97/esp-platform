@@ -67,6 +67,9 @@ void BleProvisioning::begin(const String& deviceName, ProvisioningDoneCallback o
 
     NimBLEDevice::init(deviceName.c_str());
     NimBLEDevice::setDeviceName(deviceName.c_str());
+    // Disable bonding/pairing so Android never shows a PIN dialog
+    NimBLEDevice::setSecurityAuth(false, false, false);
+    NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
 
     _server  = NimBLEDevice::createServer();
     _service = _server->createService(BLE_SERVICE_UUID);
@@ -96,6 +99,8 @@ void BleProvisioning::begin(const String& deviceName, ProvisioningDoneCallback o
 
     NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
     adv->addServiceUUID(BLE_SERVICE_UUID);
+    adv->setMinInterval(32);  // 20ms — advertise faster for quicker discovery
+    adv->setMaxInterval(64);  // 40ms
     adv->start();
 
     Serial.printf("[BLE] Advertising as: %s\n", deviceName.c_str());

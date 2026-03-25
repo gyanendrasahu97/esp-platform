@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/ble_service.dart';
 import 'provision_screen.dart';
 
@@ -10,12 +12,34 @@ class ScanScreen extends StatefulWidget {
 }
 
 class _ScanScreenState extends State<ScanScreen> {
+  String? _permError;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<BleService>().startScan();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _requestAndScan());
+  }
+
+  Future<void> _requestAndScan() async {
+    // Request BLE + location permissions at runtime (required on Android 6+/12+)
+    List<Permission> perms = [
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+    ];
+    if (Platform.isAndroid) {
+      perms.add(Permission.locationWhenInUse);
+    }
+
+    final results = await perms.request();
+    final denied = results.values.any((s) => s.isDenied || s.isPermanentlyDenied);
+
+    if (denied) {
+      setState(() => _permError =
+          'Bluetooth and location permissions are required to scan for devices.');
+      return;
+    }
+
+    if (mounted) context.read<BleService>().startScan();
   }
 
   @override
@@ -27,6 +51,29 @@ class _ScanScreenState extends State<ScanScreen> {
   @override
   Widget build(BuildContext context) {
     final ble = context.watch<BleService>();
+
+    if (_permError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Find ESP32 Device')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.bluetooth_disabled, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(_permError!, textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.grey)),
+              const SizedBox(height: 16),
+              const ElevatedButton(
+                onPressed: openAppSettings,
+                child: Text('Open Settings'),
+              ),
+            ]),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Find ESP32 Device'),
@@ -40,7 +87,7 @@ class _ScanScreenState extends State<ScanScreen> {
           else
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: ble.startScan,
+              onPressed: () => _requestAndScan(),
             ),
         ],
       ),
@@ -51,6 +98,12 @@ class _ScanScreenState extends State<ScanScreen> {
                 const SizedBox(height: 16),
                 Text(ble.isScanning ? 'Scanning for ESP devices...' : 'No devices found',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey)),
+                if (!ble.isScanning) ...[
+                  const SizedBox(height: 12),
+                  const Text('Make sure the ESP32 is powered on\nand not already provisioned',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
               ]),
             )
           : ListView.builder(
