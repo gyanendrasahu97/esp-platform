@@ -12,8 +12,9 @@ export default function FlashUsb({ binUrl, buildId }: Props) {
     )
   }
 
-  // Use absolute URL so ESP Web Tools can always resolve it regardless of deployment topology
-  const manifestUrl = `${window.location.origin}/api/compiler/manifest/${buildId}`
+  // Build manifest URL using the same base as the API client (VITE_API_URL or /api fallback)
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || '/api'
+  const manifestUrl = `${apiBase}/compiler/manifest/${buildId}`
 
   return (
     <div className="flex items-center gap-2">
