@@ -39,10 +39,13 @@ const API_REFERENCE = `// ══════════════════
 // ══════════════════════════════════════════════════
 
 // ── RUNTIME VARIABLES  (available in main.cpp) ──
-//   String  g_deviceToken   Unique device token (UUID)
-//   String  g_backendUrl    Backend URL e.g. "https://esp.cruzanet.cloud"
-//   String  g_mqttHost      MQTT broker hostname
-//   String  g_wifiSsid      Connected WiFi SSID
+//   String  g_deviceToken   Unique device token (UUID)       ← from BLE
+//   String  g_wifiSsid      Connected WiFi SSID              ← from BLE
+//   String  g_backendUrl    "https://esp.cruzanet.cloud"     ← baked in
+//   String  g_mqttHost      "esp.cruzanet.cloud"             ← baked in
+//
+//   BLE provisioning only needs: WiFi SSID + password + device token.
+//   Backend URL and MQTT host are auto-set from firmware defaults.
 
 // ── MQTT ────────────────────────────────────────
 //   mqttClient.publish(topic, payload)    Send a message

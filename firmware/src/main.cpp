@@ -56,6 +56,12 @@ bool loadCredentials() {
     g_backendUrl  = prefs.getString(NVS_KEY_BACKEND_URL,  "");
     prefs.end();
 
+    // Backend URL and MQTT host are fixed for this platform deployment.
+    // Fall back to baked-in defaults if not set via BLE provisioning.
+    if (g_backendUrl.isEmpty()) g_backendUrl = PLATFORM_BACKEND_URL;
+    if (g_mqttHost.isEmpty())   g_mqttHost   = PLATFORM_MQTT_HOST;
+
+    // Only WiFi SSID and device token must come from the user.
     return !g_wifiSsid.isEmpty() && !g_deviceToken.isEmpty();
 }
 

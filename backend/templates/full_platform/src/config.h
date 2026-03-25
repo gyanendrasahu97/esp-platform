@@ -23,6 +23,13 @@
 #define BLE_CHAR_BACKEND_URL_UUID  "beb5483e-36e1-4688-b7f5-ea07361b26ac"
 #define BLE_CHAR_STATUS_UUID       "beb5483e-36e1-4688-b7f5-ea07361b26ad"
 
+// --- Platform Server (fixed for this deployment) ---
+// WiFi credentials still come from BLE provisioning.
+// Backend URL and MQTT host are the same for all devices on this platform.
+// They are used as fallback when NVS is empty (e.g. first flash, or older firmware).
+#define PLATFORM_BACKEND_URL  "https://esp.cruzanet.cloud"
+#define PLATFORM_MQTT_HOST    "esp.cruzanet.cloud"
+
 // --- Default Connection Settings ---
 #define DEFAULT_MQTT_PORT     1883
 #define MQTT_KEEPALIVE_S      60
