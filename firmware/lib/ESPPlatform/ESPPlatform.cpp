@@ -1,4 +1,5 @@
 #include "ESPPlatform.h"
+#include "rules_engine.h"
 #include "prebake_config.h"
 #include "config.h"
 #include "wifi_manager.h"
@@ -28,6 +29,41 @@ void ESPPlatform::begin() {
 
     offlineBuffer.begin();
 
+    // Init registered output pins
+    for (auto& p : _pins) {
+        if (p.mode == PinMode_t::OUTPUT_DIGITAL) {
+            pinMode(p.pin, OUTPUT);
+            digitalWrite(p.pin, LOW);
+        } else if (p.mode == PinMode_t::OUTPUT_PWM) {
+            pinMode(p.pin, OUTPUT);
+            analogWrite(p.pin, 0);
+        } else {
+            pinMode(p.pin, p.arduinoMode);
+        }
+    }
+
+    // Set up rules engine callbacks
+    if (!_rules) _rules = new RulesEngine();
+    _rules->setGpioWriteCallback([this](const String& key, bool val) {
+        _handlePinCommand(key, JsonVariant());  // handled via pin write helper
+        for (auto& p : _pins) {
+            if (p.key == key && (p.mode == PinMode_t::OUTPUT_DIGITAL || p.mode == PinMode_t::OUTPUT_PWM)) {
+                if (p.mode == PinMode_t::OUTPUT_DIGITAL) {
+                    digitalWrite(p.pin, val);
+                    p.lastBool = val;
+                    publish(p.key, val);
+                }
+                break;
+            }
+        }
+    });
+    _rules->setPublishCallback([this](const String& key, float val) {
+        publish(key, val);
+    });
+    _rules->setPublishBoolCallback([this](const String& key, bool val) {
+        publish(key, val);
+    });
+
     if (_loadCredentials()) {
         Serial.printf("[Boot] Credentials found. WiFi: %s, Token: %s...\n",
                       _wifiSsid.c_str(), _deviceToken.substring(0, 8).c_str());
@@ -48,6 +84,12 @@ void ESPPlatform::begin() {
 }
 
 void ESPPlatform::loop() {
+    // Always tick pins (works offline too — reads inputs even without MQTT)
+    _tickPins();
+
+    // Tick rules engine (timer triggers + pending delayed actions)
+    if (_rules) _rules->tick();
+
     switch (_state) {
 
         case AppState::BLE_PROVISIONING:
@@ -76,6 +118,7 @@ void ESPPlatform::loop() {
                 _publishUi();
                 _flushBuffer();
                 otaManager.begin(_backendUrl, _deviceToken);
+                if (_rules) _rules->onBoot();
             } else if (!wifiManager.isConnected()) {
                 _state = AppState::WIFI_CONNECTING;
             }
@@ -125,6 +168,8 @@ bool ESPPlatform::publish(const String& key, const String& value) {
     JsonDocument doc;  doc[key] = value;  return _publishDoc(doc);
 }
 
+// ── Manual UI control registration ────────────────────────────────────────────
+
 void ESPPlatform::addSwitch(const String& label, const String& action) {
     _controls.push_back({"switch", label, action, "", "", 0, 100});
 }
@@ -139,6 +184,101 @@ void ESPPlatform::addSensor(const String& label, const String& key, const String
 }
 void ESPPlatform::addGauge(const String& label, const String& key, float min, float max) {
     _controls.push_back({"gauge", label, "", key, "", min, max});
+}
+
+// Overloads with state binding
+void ESPPlatform::addSwitch(const String& label, const String& action, bool* statePtr) {
+    addSwitch(label, action);
+    if (statePtr) _bindings.push_back({action, BindType::BOOL, statePtr});
+}
+void ESPPlatform::addSlider(const String& label, const String& action, float min, float max, float* statePtr) {
+    addSlider(label, action, min, max);
+    if (statePtr) _bindings.push_back({action, BindType::FLOAT, statePtr});
+}
+
+// ── GPIO Pin Registry ──────────────────────────────────────────────────────────
+
+String ESPPlatform::_labelToKey(const String& label) {
+    String key = label;
+    key.toLowerCase();
+    for (size_t i = 0; i < key.length(); i++) {
+        if (key[i] == ' ') key[i] = '_';
+    }
+    return key;
+}
+
+void ESPPlatform::addOutput(const String& label, uint8_t pin) {
+    String key = _labelToKey(label);
+    _pins.push_back({pin, PinMode_t::OUTPUT_DIGITAL, key, label, "", 0, 1, OUTPUT, false, 0, 0});
+    addSwitch(label, key);  // auto-generate switch control
+}
+
+void ESPPlatform::addInput(const String& label, uint8_t pin, uint8_t mode) {
+    String key = _labelToKey(label);
+    _pins.push_back({pin, PinMode_t::INPUT_DIGITAL, key, label, "", 0, 1, mode, false, 0, 0});
+    addSensor(label, key);  // auto-generate sensor display
+}
+
+void ESPPlatform::addAnalog(const String& label, uint8_t pin, const String& unit, float rangeMin, float rangeMax) {
+    String key = _labelToKey(label);
+    _pins.push_back({pin, PinMode_t::INPUT_ANALOG, key, label, unit, rangeMin, rangeMax, INPUT, false, 0, 0});
+    addSensor(label, key, unit);
+}
+
+void ESPPlatform::addPWM(const String& label, uint8_t pin, float rangeMin, float rangeMax) {
+    String key = _labelToKey(label);
+    _pins.push_back({pin, PinMode_t::OUTPUT_PWM, key, label, "%", rangeMin, rangeMax, OUTPUT, false, 0, 0});
+    addSlider(label, key, rangeMin, rangeMax);
+}
+
+void ESPPlatform::_tickPins() {
+    unsigned long now = millis();
+    for (auto& p : _pins) {
+        if (p.mode == PinMode_t::INPUT_DIGITAL) {
+            if (now - p.lastReadMs >= 100) {
+                p.lastReadMs = now;
+                bool val = digitalRead(p.pin);
+                if (val != p.lastBool) {
+                    p.lastBool = val;
+                    publish(p.key, val);
+                    if (_rules) _rules->onTelemetry(p.key, val ? 1.0f : 0.0f);
+                }
+            }
+        } else if (p.mode == PinMode_t::INPUT_ANALOG) {
+            if (now - p.lastReadMs >= 1000) {
+                p.lastReadMs = now;
+                int raw = analogRead(p.pin);
+                // Map 0-4095 → rangeMin-rangeMax
+                float val = p.rangeMin + (raw / 4095.0f) * (p.rangeMax - p.rangeMin);
+                val = roundf(val * 10) / 10.0f;  // 1 decimal place
+                if (fabsf(val - p.lastFloat) >= 0.1f) {
+                    p.lastFloat = val;
+                    publish(p.key, val);
+                    if (_rules) _rules->onTelemetry(p.key, val);
+                }
+            }
+        }
+    }
+}
+
+void ESPPlatform::_handlePinCommand(const String& key, JsonVariant value) {
+    for (auto& p : _pins) {
+        if (p.key != key) continue;
+        if (p.mode == PinMode_t::OUTPUT_DIGITAL) {
+            bool val = value.as<bool>();
+            digitalWrite(p.pin, val);
+            p.lastBool = val;
+            publish(p.key, val);
+        } else if (p.mode == PinMode_t::OUTPUT_PWM) {
+            float pct = value.as<float>();
+            pct = constrain(pct, p.rangeMin, p.rangeMax);
+            int duty = (int)((pct - p.rangeMin) / (p.rangeMax - p.rangeMin) * 255);
+            analogWrite(p.pin, duty);
+            p.lastFloat = pct;
+            publish(p.key, pct);
+        }
+        return;
+    }
 }
 
 bool ESPPlatform::isConnected() const {
@@ -167,7 +307,6 @@ bool ESPPlatform::_loadCredentials() {
     _backendUrl  = _prefs.getString(NVS_KEY_BACKEND_URL,  "");
     _prefs.end();
 
-    // Fall back to pre-baked credentials embedded at build time (via web editor)
 #ifdef PREBAKE_WIFI_SSID
     if (_wifiSsid.isEmpty())    _wifiSsid    = String(PREBAKE_WIFI_SSID);
     if (_wifiPass.isEmpty())    _wifiPass    = String(PREBAKE_WIFI_PASS);
@@ -252,9 +391,49 @@ void ESPPlatform::_onMqttMessage(const String& topic, const String& payload) {
         JsonDocument doc;
         deserializeJson(doc, payload);
         String action = doc["action"] | "";
-        if (!action.isEmpty()) {
-            onCommand(action, doc.as<JsonObject>());
+        if (action.isEmpty()) return;
+
+        JsonVariant val = doc["value"];
+
+        // 1. Check GPIO pin registry — handle automatically if it's a registered pin
+        bool handledByPin = false;
+        for (auto& p : _pins) {
+            if (p.key == action &&
+                (p.mode == PinMode_t::OUTPUT_DIGITAL || p.mode == PinMode_t::OUTPUT_PWM)) {
+                _handlePinCommand(action, val);
+                handledByPin = true;
+                // Notify rules engine about this command
+                if (_rules) _rules->onCommand(action, val.as<bool>());
+                break;
+            }
         }
+
+        // 2. Check state bindings (addSwitch/addSlider with pointer)
+        for (auto& b : _bindings) {
+            if (b.action == action) {
+                if (b.type == BindType::BOOL)  *((bool*)b.ptr)  = val.as<bool>();
+                if (b.type == BindType::FLOAT) *((float*)b.ptr) = val.as<float>();
+                if (b.type == BindType::INT)   *((int*)b.ptr)   = val.as<int>();
+                break;
+            }
+        }
+
+        // 3. Call user hook (always, so user can add logic on top of GPIO)
+        onCommand(action, doc.as<JsonObject>());
+
+        // 4. Auto-publish bound state
+        for (auto& b : _bindings) {
+            if (b.action == action) {
+                if (b.type == BindType::BOOL)  publish(action, *((bool*)b.ptr));
+                if (b.type == BindType::FLOAT) publish(action, *((float*)b.ptr));
+                if (b.type == BindType::INT)   publish(action, *((int*)b.ptr));
+                break;
+            }
+        }
+
+        // 5. If not a pin command, still notify rules engine
+        if (!handledByPin && _rules) _rules->onCommand(action, val.as<bool>());
+
     } else if (topic.endsWith("/ota")) {
         JsonDocument doc;
         deserializeJson(doc, payload);
@@ -264,5 +443,9 @@ void ESPPlatform::_onMqttMessage(const String& topic, const String& payload) {
             Serial.printf("[OTA] Push received: %s\n", url.c_str());
             otaManager.applyFromUrl(url, chk);
         }
+
+    } else if (topic.endsWith("/rules")) {
+        Serial.println("[Rules] Received new rules JSON");
+        if (_rules) _rules->loadRules(payload);
     }
 }

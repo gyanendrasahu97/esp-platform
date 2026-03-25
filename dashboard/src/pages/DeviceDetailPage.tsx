@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Wifi, WifiOff, Activity, Copy, Check } from 'lucide-react'
+import { ArrowLeft, Wifi, WifiOff, Activity, Copy, Check, Layers } from 'lucide-react'
 import Sidebar from '../components/layout/Sidebar'
 import LiveChart from '../components/LiveChart'
 import ControlPanel from '../components/ControlPanel'
@@ -52,9 +52,17 @@ export default function DeviceDetailPage() {
       <Sidebar />
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mb-6">
-          <Link to="/" className="flex items-center gap-1 text-slate-400 hover:text-white text-sm mb-3">
-            <ArrowLeft size={16} /> Back
-          </Link>
+          <div className="flex items-center justify-between mb-3">
+            <Link to="/" className="flex items-center gap-1 text-slate-400 hover:text-white text-sm">
+              <ArrowLeft size={16} /> Back
+            </Link>
+            <Link
+              to={`/devices/${device?.id}/builder`}
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-lg px-3 py-1.5 text-sm transition-colors"
+            >
+              <Layers size={14} /> Builder
+            </Link>
+          </div>
 
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">{device.name}</h1>
@@ -117,6 +125,7 @@ export default function DeviceDetailPage() {
             <ControlPanel
               deviceId={device.id}
               descriptor={enrichedDescriptor}
+              latestData={latestData}
             />
           </div>
         </div>

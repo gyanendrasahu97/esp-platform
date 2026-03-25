@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import DeviceDetailPage from './pages/DeviceDetailPage'
 import EditorPage from './pages/EditorPage'
+import DeviceBuilderPage from './pages/DeviceBuilderPage'
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/" element={<RequireAuth><DashboardPage /></RequireAuth>} />
           <Route path="/devices/:id" element={<RequireAuth><ErrorBoundary><DeviceDetailPage /></ErrorBoundary></RequireAuth>} />
           <Route path="/editor" element={<RequireAuth><ErrorBoundary><EditorPage /></ErrorBoundary></RequireAuth>} />
+          <Route path="/devices/:id/builder" element={<RequireAuth><ErrorBoundary><DeviceBuilderPage /></ErrorBoundary></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </ErrorBoundary>

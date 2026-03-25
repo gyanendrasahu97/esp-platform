@@ -28,4 +28,4 @@ class Device(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     owner: Mapped["User"] = relationship("User", back_populates="devices")
-    telemetry: Mapped[list["TelemetryRecord"]] = relationship("TelemetryRecord", back_populates="device", lazy="select")
+    telemetry: Mapped[list["TelemetryRecord"]] = relationship("TelemetryRecord", back_populates="device", lazy="select", cascade="all, delete-orphan")

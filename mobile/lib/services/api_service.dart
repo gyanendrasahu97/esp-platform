@@ -1,11 +1,17 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/device.dart';
 
+// Use IOClient so badCertificateCallback works regardless of platform HTTP stack
+final _ioClient = IOClient(
+  HttpClient()..badCertificateCallback = (cert, host, port) => true,
+);
+
 class ApiService extends ChangeNotifier {
-  String _baseUrl = 'http://localhost/api';
+  String _baseUrl = 'https://api.esp.cruzanet.cloud/api';
   String? _token;
 
   bool get isLoggedIn => _token != null;
@@ -14,7 +20,7 @@ class ApiService extends ChangeNotifier {
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString('auth_token');
-    _baseUrl = prefs.getString('base_url') ?? 'http://localhost/api';
+    _baseUrl = prefs.getString('base_url') ?? 'https://api.esp.cruzanet.cloud/api';
     notifyListeners();
   }
 
@@ -31,7 +37,7 @@ class ApiService extends ChangeNotifier {
   };
 
   Future<bool> login(String email, String password) async {
-    final res = await http.post(
+    final res = await _ioClient.post(
       Uri.parse('$_baseUrl/auth/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'email': email, 'password': password}),
@@ -55,7 +61,7 @@ class ApiService extends ChangeNotifier {
   }
 
   Future<List<Device>> getDevices() async {
-    final res = await http.get(Uri.parse('$_baseUrl/devices'), headers: _headers);
+    final res = await _ioClient.get(Uri.parse('$_baseUrl/devices'), headers: _headers);
     if (res.statusCode == 200) {
       final list = jsonDecode(res.body) as List<dynamic>;
       return list.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
@@ -64,7 +70,7 @@ class ApiService extends ChangeNotifier {
   }
 
   Future<void> sendCommand(String deviceId, String action, dynamic value) async {
-    await http.post(
+    await _ioClient.post(
       Uri.parse('$_baseUrl/devices/$deviceId/command'),
       headers: _headers,
       body: jsonEncode({'action': action, 'value': value}),

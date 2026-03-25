@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -7,7 +8,16 @@ import 'services/mqtt_service.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
 
+// Accept self-signed / incomplete-chain certs (Let's Encrypt on some devices)
+class _TrustAllCerts extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) =>
+      super.createHttpClient(context)
+        ..badCertificateCallback = (cert, host, port) => true;
+}
+
 void main() {
+  HttpOverrides.global = _TrustAllCerts();
   runApp(const EspPlatformApp());
 }
 

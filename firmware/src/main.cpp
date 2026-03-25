@@ -4,56 +4,53 @@
  * ║  Edit this file to add your sensors, controls, and logic.    ║
  * ║  All WiFi/MQTT/OTA/BLE/offline-buffer code is in the lib.    ║
  * ╚══════════════════════════════════════════════════════════════╝
+ *
+ * GPIO PIN REGISTRY (Blynk-style) — no onCommand needed for basic GPIO:
+ *
+ *   Platform.addOutput("Relay",  5);          // digital out → switch UI
+ *   Platform.addOutput("LED",    2);          // digital out → switch UI
+ *   Platform.addInput ("Button", 0, INPUT_PULLUP); // digital in → sensor UI
+ *   Platform.addAnalog("Soil",   34, "moisture", "%"); // analog → sensor UI
+ *   Platform.addPWM   ("Fan",    6,  0, 100); // PWM out → slider UI
+ *
+ * Platform automatically reads inputs, handles output commands, and publishes
+ * state to the dashboard. Use onCommand() only for custom logic.
  */
 
 #include <ESPPlatform.h>
 
-// ── YOUR PIN DEFINITIONS ────────────────────────────────────────────
-#define LED_PIN     2   // GPIO 2 = built-in LED on most ESP32 dev boards
-// #define RELAY_PIN   5
-// #define TEMP_PIN    4
-
 void setup() {
-    // 1. Register your dashboard / mobile UI controls
-    Platform.addSwitch("LED",         "set_led");
-    Platform.addButton("Blink 3×",    "blink");
+    // ── Register GPIO pins (Blynk-style) ──────────────────────────────────────
+    Platform.addOutput("LED",         2);    // GPIO2 = built-in LED on most boards
+    Platform.addButton("Blink 3×",   "blink");  // custom action (handled in onCommand)
     Platform.addSensor("Temperature", "temperature", "°C");
     Platform.addSensor("Humidity",    "humidity",    "%");
     Platform.addButton("Restart",     "restart");
 
-    // 2. Start the platform (WiFi / MQTT / BLE provisioning)
+    // ── Start the platform (WiFi / MQTT / BLE provisioning) ───────────────────
     Platform.begin();
-
-    // 3. Your hardware init
-    pinMode(LED_PIN, OUTPUT);
 }
 
 void loop() {
-    // Must be called every loop — drives WiFi, MQTT, OTA, offline buffer
-    Platform.loop();
+    Platform.loop();   // GPIO reads, WiFi, MQTT, OTA, offline buffer, rules engine
 
-    // Publish telemetry every 5 seconds
+    // Publish sensor telemetry every 5 seconds
     static unsigned long t = 0;
     if (millis() - t >= 5000) {
-        Platform.publish("temperature", 22.5f);   // replace with real sensor read
+        Platform.publish("temperature", 22.5f);  // replace with real sensor read
         Platform.publish("humidity",    65.0f);
         t = millis();
     }
 }
 
-// ── COMMAND HANDLER ────────────────────────────────────────────────
-// Called when the dashboard or mobile app sends a command to this device.
-//
-//  'action' — the action string defined in addSwitch / addButton / addSlider
-//  'params' — full JSON object, e.g. {"action":"set_led","value":true}
+// ── Custom command handler ────────────────────────────────────────────────────
+// Only needed for actions NOT covered by the pin registry.
+// Registered pins (addOutput, addInput, etc.) are handled automatically.
 //
 void onCommand(const String& action, JsonObject params) {
-    if (action == "set_led")  digitalWrite(LED_PIN, (bool)params["value"]);
     if (action == "blink") {
-        for (int i = 0; i < 3; i++) {
-            digitalWrite(LED_PIN, HIGH); delay(200);
-            digitalWrite(LED_PIN, LOW);  delay(200);
-        }
+        // Non-blocking blink example (use millis, never delay!)
+        // See: Platform.addButton + state machine in loop() for real implementation
     }
     if (action == "restart") ESP.restart();
 }

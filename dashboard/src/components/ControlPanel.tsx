@@ -6,11 +6,15 @@ import type { UiControl, UiDescriptor } from '../types'
 interface Props {
   deviceId: string
   descriptor: UiDescriptor | null
+  latestData?: Record<string, unknown>
 }
 
-export default function ControlPanel({ deviceId, descriptor }: Props) {
-  const [values, setValues] = useState<Record<string, unknown>>({})
+export default function ControlPanel({ deviceId, descriptor, latestData = {} }: Props) {
+  const [localValues, setLocalValues] = useState<Record<string, unknown>>({})
   const [sending, setSending] = useState<string | null>(null)
+
+  // Device-reported state (from MQTT telemetry) takes priority over local optimistic state
+  const values = { ...localValues, ...latestData }
 
   const sendCommand = async (action: string, value: unknown) => {
     setSending(action)
@@ -41,7 +45,7 @@ export default function ControlPanel({ deviceId, descriptor }: Props) {
           sending={sending === ctrl.action}
           onChange={(v) => {
             const k = ctrl.action || ctrl.key || String(i)
-            setValues(prev => ({ ...prev, [k]: v }))
+            setLocalValues(prev => ({ ...prev, [k]: v }))
           }}
           onSend={(v) => ctrl.action && sendCommand(ctrl.action, v)}
         />

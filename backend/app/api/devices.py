@@ -95,6 +95,36 @@ async def delete_device(
     await db.commit()
 
 
+@router.put("/{device_id}/ui", response_model=DeviceOut)
+async def update_device_ui(
+    device_id: uuid.UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save a UI descriptor and push it to the device via MQTT (retain=true)."""
+    result = await db.execute(
+        select(Device).where(Device.id == device_id, Device.owner_id == current_user.id)
+    )
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    device.ui_descriptor = body
+    await db.commit()
+    await db.refresh(device)
+
+    import json
+    from app.mqtt_client import mqtt_manager
+    topic = f"devices/{device.device_token}/ui"
+    try:
+        mqtt_manager.publish(topic, json.dumps(body), qos=1, retain=True)
+    except Exception:
+        pass  # Still saved to DB even if MQTT fails
+
+    return device
+
+
 @router.post("/heartbeat", status_code=status.HTTP_200_OK)
 async def heartbeat(body: DeviceHeartbeat, db: AsyncSession = Depends(get_db)):
     """Called by ESP32 on boot to register its presence."""

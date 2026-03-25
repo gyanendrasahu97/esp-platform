@@ -11,22 +11,13 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _email    = TextEditingController();
   final _password = TextEditingController();
-  final _url      = TextEditingController(text: 'http://');
   bool _loading   = false;
   String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    final api = context.read<ApiService>();
-    _url.text = api.baseUrl.replaceAll('/api', '');
-  }
 
   Future<void> _login() async {
     setState(() { _loading = true; _error = null; });
     try {
       final api = context.read<ApiService>();
-      await api.setBaseUrl(_url.text.trim());
       final ok = await api.login(_email.text.trim(), _password.text);
       if (!ok && mounted) setState(() => _error = 'Invalid credentials');
     } catch (e) {
@@ -52,9 +43,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 32),
 
-              TextField(controller: _url,
-                decoration: const InputDecoration(labelText: 'Server URL', hintText: 'http://your-vps-ip')),
-              const SizedBox(height: 12),
               TextField(controller: _email,
                 decoration: const InputDecoration(labelText: 'Email'),
                 keyboardType: TextInputType.emailAddress),

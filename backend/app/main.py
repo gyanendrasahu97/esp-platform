@@ -14,6 +14,7 @@ import app.models.user      # noqa: F401
 import app.models.device    # noqa: F401
 import app.models.telemetry # noqa: F401
 import app.models.firmware  # noqa: F401
+import app.models.rule_set  # noqa: F401
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ def create_app() -> FastAPI:
     mqtt.init_app(app)
 
     # Register API routers
-    from app.api import auth, devices, telemetry, commands, ota, compiler
+    from app.api import auth, devices, telemetry, commands, ota, compiler, rules
     from app.websocket import live_data
 
     prefix = "/api"
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(commands.router, prefix=prefix)
     app.include_router(ota.router, prefix=prefix)
     app.include_router(compiler.router, prefix=prefix)
+    app.include_router(rules.router, prefix=prefix)
     app.include_router(live_data.router)  # /ws prefix already set
 
     @app.get("/api/health")
