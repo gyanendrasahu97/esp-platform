@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-declare global {
+declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
       'esp-web-install-button': React.DetailedHTMLProps<
@@ -10,3 +10,5 @@ declare global {
     }
   }
 }
+
+export {}
