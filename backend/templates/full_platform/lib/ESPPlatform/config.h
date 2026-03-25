@@ -27,7 +27,7 @@
 // WiFi credentials still come from BLE provisioning.
 // Backend URL and MQTT host are the same for all devices on this platform.
 // They are used as fallback when NVS is empty (e.g. first flash, or older firmware).
-#define PLATFORM_BACKEND_URL  "https://esp.cruzanet.cloud"
+#define PLATFORM_BACKEND_URL  "https://api.esp.cruzanet.cloud"
 #define PLATFORM_MQTT_HOST    "esp.cruzanet.cloud"
 
 // --- Default Connection Settings ---
