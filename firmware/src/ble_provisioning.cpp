@@ -16,7 +16,7 @@ class StringCharCallbacks : public NimBLECharacteristicCallbacks {
 public:
     String* target;
     explicit StringCharCallbacks(String* t) : target(t) {}
-    void onWrite(NimBLECharacteristic* c) override {
+    void onWrite(NimBLECharacteristic* c, NimBLEConnInfo& connInfo) override {
         *target = String(c->getValue().c_str());
         Serial.printf("[BLE] Written to char: %s\n", target->substring(0, 20).c_str());
     }
@@ -25,7 +25,7 @@ public:
 // ---- "Commit" write - triggers provisioning done ----
 class CommitCharCallbacks : public NimBLECharacteristicCallbacks {
 public:
-    void onWrite(NimBLECharacteristic* c) override {
+    void onWrite(NimBLECharacteristic* c, NimBLEConnInfo& connInfo) override {
         String val = String(c->getValue().c_str());
         if (val != "commit") return;
 
@@ -96,7 +96,6 @@ void BleProvisioning::begin(const String& deviceName, ProvisioningDoneCallback o
 
     NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
     adv->addServiceUUID(BLE_SERVICE_UUID);
-    adv->setScanResponse(true);
     adv->start();
 
     Serial.printf("[BLE] Advertising as: %s\n", deviceName.c_str());
@@ -104,9 +103,6 @@ void BleProvisioning::begin(const String& deviceName, ProvisioningDoneCallback o
 
 void BleProvisioning::stop() {
     NimBLEDevice::getAdvertising()->stop();
-    if (_server) {
-        _server->disconnectAll();
-    }
     NimBLEDevice::deinit(true);
     _active = false;
     Serial.println("[BLE] BLE stopped, RAM freed");
