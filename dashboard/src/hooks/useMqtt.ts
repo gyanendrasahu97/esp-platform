@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import mqtt, { type MqttClient } from 'mqtt'
 
-const MQTT_URL = import.meta.env.VITE_MQTT_WS_URL || 'ws://localhost/mqtt'
+// Auto-select wss:// when page is served over HTTPS to avoid mixed-content block
+const _mqttProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+const MQTT_URL = import.meta.env.VITE_MQTT_WS_URL ||
+  `${_mqttProto}://${window.location.host}/mqtt`
 
 export function useMqtt(deviceToken: string | null) {
   const clientRef = useRef<MqttClient | null>(null)
