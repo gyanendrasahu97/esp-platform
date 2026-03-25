@@ -1,0 +1,92 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-espplatform}
+      POSTGRES_PASSWORD: ${DB_PASS:-espplatform}
+      POSTGRES_DB: ${DB_NAME:-espplatform}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-espplatform}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    volumes:
+      - ./docker/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquittodata:/mosquitto/data
+      - mosquittolog:/mosquitto/log
+    ports:
+      - "1883:1883"   # MQTT (ESP32 devices)
+      - "9001:9001"   # MQTT over WebSocket (browser dashboard)
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-espplatform}:${DB_PASS:-espplatform}@postgres:5432/${DB_NAME:-espplatform}
+      MQTT_BROKER: mosquitto
+      MQTT_PORT: 1883
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-changeme-set-in-dokploy}
+      OTA_STORAGE_PATH: /app/firmware_storage
+      PIO_WORKSPACE: /app/pio_workspace
+      MAX_CONCURRENT_BUILDS: ${MAX_CONCURRENT_BUILDS:-1}
+    volumes:
+      - firmware_storage:/app/firmware_storage
+      - pio_workspace:/app/pio_workspace
+      - pio_cache:/root/.platformio
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://api.esp.cruzanet.cloud}
+        VITE_MQTT_WS_URL: ${VITE_MQTT_WS_URL:-ws://mqtt.cruzanet.cloud:9001}
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  redisdata:
+  mosquittodata:
+  mosquittolog:
+  firmware_storage:
+  pio_workspace:
+  pio_cache:

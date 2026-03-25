@@ -1,0 +1,77 @@
+# ============================================================
+# ESP Platform .gitignore
+# ============================================================
+
+# --- Environment / Secrets ---
+.env
+.mcp.json
+*.env.local
+*.env.production
+
+# --- Python / Backend ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+pip-log.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# --- Node / Dashboard ---
+node_modules/
+dashboard/dist/
+dashboard/.vite/
+*.tsbuildinfo
+
+# --- Flutter / Mobile ---
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/build/
+mobile/.packages
+mobile/pubspec.lock
+
+# --- PlatformIO / Firmware ---
+firmware/.pio/
+firmware/.pioenvs/
+firmware/.piolibdeps/
+firmware/.clang_complete
+firmware/.gcc-flags.json
+*.orig
+
+# --- Docker ---
+docker/mosquitto/data/
+docker/mosquitto/log/
+
+# --- IDE ---
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*.bak
+*~
+.DS_Store
+Thumbs.db
+
+# --- Firmware binaries (stored in Docker volume, not git) ---
+firmware_storage/
+*.bin
+*.elf
+*.map
+
+# --- Logs ---
+*.log
+logs/

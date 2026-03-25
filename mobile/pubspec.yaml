@@ -1,0 +1,36 @@
+name: esp_platform
+description: ESP Platform IoT mobile app - BLE provisioning and dynamic device UI.
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # BLE
+  flutter_reactive_ble: ^5.3.2
+
+  # HTTP
+  http: ^1.2.2
+
+  # MQTT
+  mqtt_client: ^10.5.1
+
+  # State management
+  provider: ^6.1.2
+
+  # Storage
+  shared_preferences: ^2.3.3
+
+  # UI
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

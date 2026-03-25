@@ -1,0 +1,1 @@
+Simple LED blink to verify your ESP32 and toolchain are working correctly.
