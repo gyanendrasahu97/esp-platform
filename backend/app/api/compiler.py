@@ -21,6 +21,10 @@ class BuildRequest(BaseModel):
     source_code: str
     board: str = "esp32dev"
     template_id: str | None = None  # if set, copies all template files into workspace
+    # Optional: pre-bake WiFi + device token into the binary (skips BLE provisioning)
+    prebake_wifi_ssid: str | None = None
+    prebake_wifi_pass: str | None = None
+    prebake_device_token: str | None = None
 
 
 class BuildResult(BaseModel):
@@ -54,6 +58,9 @@ async def build_firmware(
         source_code=body.source_code,
         board=body.board,
         template_id=body.template_id,
+        prebake_wifi_ssid=body.prebake_wifi_ssid,
+        prebake_wifi_pass=body.prebake_wifi_pass,
+        prebake_device_token=body.prebake_device_token,
     )
 
     firmware_id = None

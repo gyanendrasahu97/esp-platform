@@ -1,34 +1,52 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import { Play, RefreshCw, ChevronDown, BookOpen, Terminal } from 'lucide-react'
+import { Play, RefreshCw, ChevronDown, BookOpen, Terminal, Settings, ChevronUp } from 'lucide-react'
 import Sidebar from '../components/layout/Sidebar'
 import CodeEditor from '../components/editor/CodeEditor'
 import FlashUsb from '../components/editor/FlashUsb'
 import FlashOta from '../components/editor/FlashOta'
 import api from '../api/client'
-import type { BuildResult, Template } from '../types'
+import type { BuildResult, Device, Template } from '../types'
 
-const DEFAULT_CODE = `// ESP Platform - Full Platform Firmware (main.cpp)
-// All other files (WiFi, MQTT, BLE, OTA, offline buffer) are included automatically.
-// Edit this file to customize sensors, controls, or behavior.
-// Build → Flash USB (browser) or Flash OTA (over WiFi).
+const DEFAULT_CODE = `/**
+ * ESP Platform Firmware — main.cpp
+ * All WiFi/MQTT/OTA/BLE/offline-buffer code is in the platform library.
+ * Edit only this file.
+ */
 
-#include <Arduino.h>
-#include <Preferences.h>
-#include <ArduinoJson.h>
-#include <HTTPClient.h>
+#include <ESPPlatform.h>
 
-#include "config.h"
-#include "wifi_manager.h"
-#include "mqtt_client.h"
-#include "sensor_manager.h"
-#include "control_handler.h"
-#include "ota_manager.h"
-#include "offline_buffer.h"
-#include "ble_provisioning.h"
-#include "ui_descriptor.h"
+void setup() {
+    Platform.addSwitch("LED",         "set_led");
+    Platform.addButton("Blink 3x",    "blink");
+    Platform.addSensor("Temperature", "temperature", "\\u00b0C");
+    Platform.addSensor("Humidity",    "humidity",    "%");
+    Platform.addButton("Restart",     "restart");
 
-// ---- load full platform main from template ----
-// (This file is replaced by the template's main.cpp on build)
+    Platform.begin();
+    pinMode(LED_PIN, OUTPUT);
+}
+
+void loop() {
+    Platform.loop();
+
+    static unsigned long t = 0;
+    if (millis() - t >= 5000) {
+        Platform.publish("temperature", 22.5f);
+        Platform.publish("humidity",    65.0f);
+        t = millis();
+    }
+}
+
+void onCommand(const String& action, JsonObject params) {
+    if (action == "set_led")  digitalWrite(LED_PIN, (bool)params["value"]);
+    if (action == "blink") {
+        for (int i = 0; i < 3; i++) {
+            digitalWrite(LED_PIN, HIGH); delay(200);
+            digitalWrite(LED_PIN, LOW);  delay(200);
+        }
+    }
+    if (action == "restart") ESP.restart();
+}
 `
 
 const LS_BUILD_KEY = 'esp_last_build'
@@ -37,93 +55,67 @@ const LS_BUILD_KEY = 'esp_last_build'
 const API_REFERENCE = `// ══════════════════════════════════════════════════
 //  ESP PLATFORM  —  API REFERENCE  (read-only)
 // ══════════════════════════════════════════════════
+//  #include <ESPPlatform.h>
+//  extern ESPPlatform Platform;
+// ══════════════════════════════════════════════════
 
-// ── RUNTIME VARIABLES  (available in main.cpp) ──
-//   String  g_deviceToken   Unique device token (UUID)       ← from BLE
-//   String  g_wifiSsid      Connected WiFi SSID              ← from BLE
-//   String  g_backendUrl    "https://esp.cruzanet.cloud"     ← baked in
-//   String  g_mqttHost      "esp.cruzanet.cloud"             ← baked in
-//
-//   BLE provisioning only needs: WiFi SSID + password + device token.
-//   Backend URL and MQTT host are auto-set from firmware defaults.
+// ── LIFECYCLE ───────────────────────────────────
+//   Platform.begin()    Call once in setup()
+//                       Loads NVS → starts WiFi or BLE provisioning
+//   Platform.loop()     Call every loop()
+//                       Drives WiFi, MQTT, OTA, offline-buffer flush
 
-// ── MQTT ────────────────────────────────────────
-//   mqttClient.publish(topic, payload)    Send a message
-//   mqttClient.isConnected()              true if online
-//
-//   Topics:
-//     "devices/" + g_deviceToken + "/telemetry"  → you publish here
-//     "devices/" + g_deviceToken + "/commands"   → platform reads, calls controlHandler
-//     "devices/" + g_deviceToken + "/ui"         → publish your UI descriptor (retained)
+// ── PUBLISH TELEMETRY ───────────────────────────
+//   Platform.publish("key", float)    Send a float reading
+//   Platform.publish("key", int)      Send an integer
+//   Platform.publish("key", bool)     Send a boolean
+//   Platform.publish("key", String)   Send a string
+//   // Buffered automatically when MQTT is offline
 
-// ── SENSOR MANAGER ──────────────────────────────
-//   sensorManager.readInto(JsonDocument& doc)
-//   // Adds: temperature, humidity, uptime_s, rssi, fw_version
-//   // Edit sensor_manager.cpp to add real sensors
+// ── REGISTER UI CONTROLS ────────────────────────
+//   Platform.addSwitch("Label", "action")
+//   Platform.addButton("Label", "action")
+//   Platform.addSlider("Label", "action", min, max)
+//   Platform.addSensor("Label", "telemetry_key", "unit")
+//   Platform.addGauge ("Label", "telemetry_key", min, max)
+//   // Call before Platform.begin()
 
-// ── CONTROL HANDLER ─────────────────────────────
-//   controlHandler.handle(topic, payload)
-//   // Built-in actions: set_led, blink, restart
-//   // Edit control_handler.cpp to add custom actions:
-//   //   {"action":"set_relay","value":true}
-//   //   {"action":"set_speed","value":75}
+// ── STATUS ──────────────────────────────────────
+//   Platform.isConnected()        true when WiFi + MQTT online
+//   Platform._deviceToken         Device UUID (String)
+//   Platform._backendUrl          Backend URL (String)
 
-// ── OFFLINE BUFFER ──────────────────────────────
-//   offlineBuffer.store(payload)             Buffer when offline
-//   offlineBuffer.flush(publishFn)           Flush on reconnect
-//   offlineBuffer.hasData()                  true if buffer not empty
-//   offlineBuffer.clear()                    Wipe buffer
-
-// ── OTA MANAGER ─────────────────────────────────
-//   otaManager.checkAndApply()              Poll backend for update
-//   otaManager.applyFromUrl(url, checksum)  Flash from URL directly
-
-// ── UI DESCRIPTOR ───────────────────────────────
-//   String buildUiDescriptor(g_deviceToken)
-//   // Returns JSON for dashboard/mobile dynamic UI
-//   // Edit ui_descriptor.cpp to add/remove controls
-
-// ── WIFI MANAGER ────────────────────────────────
-//   wifiManager.isConnected()    true if WiFi up
-//   wifiManager.getIP()          Local IP as String
-//   wifiManager.getState()       WiFiState enum
+// ── COMMAND HOOK ────────────────────────────────
+//   void onCommand(const String& action, JsonObject params)
+//   // Define this in main.cpp — called on every incoming command
+//   // params["value"] contains the control value
 
 // ══════════════════════════════════════════════════
-//  CONFIGURABLE CONSTANTS  (from config.h)
+//  CONSTANTS  (lib/ESPPlatform/config.h)
 // ══════════════════════════════════════════════════
-//
-//  Pin assignments:
 #define LED_PIN              2        // Built-in LED (active HIGH)
 #define SENSOR_DHT_PIN       4        // DHT22 data pin
-//
-//  Timing:
-#define TELEMETRY_INTERVAL_MS   5000  // Publish every 5 s
-#define OTA_CHECK_INTERVAL_MS   300000// OTA check every 5 min
-//
-//  Offline buffer:
+#define TELEMETRY_INTERVAL_MS   5000  // ms between OTA checks
+#define OTA_CHECK_INTERVAL_MS   300000
 #define OFFLINE_BUFFER_MAX_BYTES  524288  // 512 KB
-#define OFFLINE_FLUSH_BATCH       20      // Records per flush
-//
-//  Identity:
 #define FIRMWARE_VERSION  "1.0.0"
 #define DEVICE_NAME       "ESP Platform Device"
 //
-//  To override in main.cpp:
+//  Override any constant in main.cpp before #include:
 //    #undef  LED_PIN
-//    #define LED_PIN 5
-//
+//    #define LED_PIN  5
+
 // ══════════════════════════════════════════════════
-//  DYNAMIC UI JSON FORMAT
+//  DYNAMIC UI JSON  (auto-built from addXxx calls)
 // ══════════════════════════════════════════════════
 // {
-//   "device_name": "Pump Controller",
-//   "firmware_version": "1.0.0",
+//   "device_name": "ESP Platform Device",
 //   "controls": [
-//     {"type":"switch",  "label":"Motor",    "action":"set_motor"},
-//     {"type":"slider",  "label":"Speed",    "action":"set_speed", "min":0,"max":100},
-//     {"type":"sensor",  "label":"Temp",     "key":"temperature",  "unit":"°C"},
-//     {"type":"gauge",   "label":"Moisture", "key":"soil",         "min":0,"max":100},
-//     {"type":"button",  "label":"Reset",    "action":"restart"}
+//     {"type":"switch",  "label":"Motor",   "action":"set_motor"},
+//     {"type":"slider",  "label":"Speed",   "action":"set_speed","min":0,"max":100},
+//     {"type":"sensor",  "label":"Temp",    "key":"temperature", "unit":"°C"},
+//     {"type":"gauge",   "label":"Moisture","key":"soil",        "min":0,"max":100},
+//     {"type":"button",  "label":"Reset",   "action":"restart"}
 //   ]
 // }
 // ══════════════════════════════════════════════════
@@ -233,10 +225,19 @@ export default function EditorPage() {
   const [output, setOutput]           = useState('')
   const outputRef = useRef<HTMLDivElement>(null)
 
+  // Pre-bake settings state
+  const [prebakeOpen, setPrebakeOpen]           = useState(false)
+  const [devices, setDevices]                   = useState<Device[]>([])
+  const [prebakeDeviceId, setPrebakeDeviceId]   = useState('')
+  const [prebakeWifiSsid, setPrebakeWifiSsid]   = useState('')
+  const [prebakeWifiPass, setPrebakeWifiPass]   = useState('')
+
   useEffect(() => {
     // Load templates and auto-load full_platform main.cpp
     api.get<Template[]>('/compiler/templates').then(r => setTemplates(r.data))
     api.get<{ code: string }>('/compiler/templates/full_platform').then(r => setCode(r.data.code)).catch(() => {})
+    // Load devices for pre-bake selector
+    api.get<Device[]>('/devices').then(r => setDevices(r.data)).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -263,6 +264,11 @@ export default function EditorPage() {
         source_code: code,
         board,
         template_id: 'full_platform',
+        ...(selectedDevice && prebakeWifiSsid ? {
+          prebake_wifi_ssid: prebakeWifiSsid,
+          prebake_wifi_pass: prebakeWifiPass,
+          prebake_device_token: selectedDevice.device_token,
+        } : {}),
       })
       setBuildResult(data)
       setOutput(data.output)
@@ -277,6 +283,8 @@ export default function EditorPage() {
       setBuilding(false)
     }
   }
+
+  const selectedDevice = devices.find(d => d.id === prebakeDeviceId)
 
   return (
     <div className="flex h-screen bg-slate-950 text-white overflow-hidden">
@@ -315,7 +323,7 @@ export default function EditorPage() {
           {/* Restored build indicator */}
           {buildResult?.success && !output && (
             <span className="text-xs text-slate-500 italic">
-              Last build: {buildResult.build_id.slice(0, 8)}
+              Last build: {buildResult.build_id?.slice(0, 8)}
             </span>
           )}
 
@@ -332,6 +340,79 @@ export default function EditorPage() {
           {/* Flash buttons */}
           <FlashUsb binUrl={buildResult?.bin_url ?? null} buildId={buildResult?.build_id ?? null} />
           <FlashOta firmwareId={buildResult?.firmware_id ?? null} />
+        </div>
+
+        {/* Pre-bake Settings — collapsible panel */}
+        <div className="border-b border-slate-800 bg-slate-900/60 flex-shrink-0">
+          <button
+            onClick={() => setPrebakeOpen(o => !o)}
+            className="flex items-center gap-2 w-full px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            <Settings size={12} />
+            <span className="font-medium">Pre-bake Settings</span>
+            <span className="text-slate-600 ml-1">
+              {selectedDevice && prebakeWifiSsid
+                ? `· ${selectedDevice.name} · ${prebakeWifiSsid}`
+                : '· optional: embed WiFi + device token at build time (skip BLE)'}
+            </span>
+            <div className="flex-1" />
+            {prebakeOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+
+          {prebakeOpen && (
+            <div className="px-4 pb-3 grid grid-cols-3 gap-3">
+              {/* Device selector */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-slate-500 uppercase tracking-wide">Device</label>
+                <div className="relative">
+                  <select
+                    value={prebakeDeviceId}
+                    onChange={e => setPrebakeDeviceId(e.target.value)}
+                    className="w-full appearance-none bg-slate-800 border border-slate-700 text-xs text-white rounded-lg pl-2 pr-6 py-1.5 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">— none (use BLE) —</option>
+                    {devices.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({d.device_token.slice(0, 8)}…)
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={10} className="absolute right-2 top-2 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* WiFi SSID */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-slate-500 uppercase tracking-wide">WiFi SSID</label>
+                <input
+                  type="text"
+                  value={prebakeWifiSsid}
+                  onChange={e => setPrebakeWifiSsid(e.target.value)}
+                  placeholder="MyNetwork"
+                  className="bg-slate-800 border border-slate-700 text-xs text-white rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-500 placeholder:text-slate-600"
+                />
+              </div>
+
+              {/* WiFi Password */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-slate-500 uppercase tracking-wide">WiFi Password</label>
+                <input
+                  type="password"
+                  value={prebakeWifiPass}
+                  onChange={e => setPrebakeWifiPass(e.target.value)}
+                  placeholder="••••••••"
+                  className="bg-slate-800 border border-slate-700 text-xs text-white rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-500 placeholder:text-slate-600"
+                />
+              </div>
+
+              {prebakeDeviceId && prebakeWifiSsid && (
+                <div className="col-span-3 flex items-center gap-1.5 text-[10px] text-green-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                  WiFi + device token will be embedded in the next build — BLE provisioning skipped on first boot
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Editor + Output split */}

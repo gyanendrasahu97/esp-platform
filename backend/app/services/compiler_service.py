@@ -69,7 +69,15 @@ class CompilerService:
             return main_cpp.read_text()
         return None
 
-    async def compile(self, source_code: str, board: str = "esp32dev", template_id: str | None = None) -> dict:
+    async def compile(
+        self,
+        source_code: str,
+        board: str = "esp32dev",
+        template_id: str | None = None,
+        prebake_wifi_ssid: str | None = None,
+        prebake_wifi_pass: str | None = None,
+        prebake_device_token: str | None = None,
+    ) -> dict:
         build_id = str(uuid4())
         workspace = Path(settings.pio_workspace) / build_id
         workspace.mkdir(parents=True, exist_ok=True)
@@ -77,14 +85,12 @@ class CompilerService:
         src_dir = workspace / "src"
         src_dir.mkdir(exist_ok=True)
 
-        # If a multi-file template exists, copy all its files first
+        # If a multi-file template exists, copy its lib/ directory and platformio.ini
         template_dir = TEMPLATES_DIR / template_id if template_id else None
         if template_dir and template_dir.exists():
-            template_src = template_dir / "src"
-            if template_src.exists():
-                for f in template_src.iterdir():
-                    if f.is_file():
-                        shutil.copy2(f, src_dir / f.name)
+            template_lib = template_dir / "lib"
+            if template_lib.exists():
+                shutil.copytree(template_lib, workspace / "lib")
             template_ini = template_dir / "platformio.ini"
             if template_ini.exists():
                 shutil.copy2(template_ini, workspace / "platformio.ini")
@@ -92,6 +98,19 @@ class CompilerService:
                 (workspace / "platformio.ini").write_text(PLATFORMIO_INI_TEMPLATE.format(board=board))
         else:
             (workspace / "platformio.ini").write_text(PLATFORMIO_INI_TEMPLATE.format(board=board))
+
+        # Generate prebake_config.h — overwrites the default in lib/ESPPlatform/
+        if prebake_wifi_ssid and prebake_device_token:
+            prebake_h = (
+                "#pragma once\n"
+                "// Pre-baked credentials injected by ESP Platform web editor\n"
+                f'#define PREBAKE_WIFI_SSID    "{prebake_wifi_ssid}"\n'
+                f'#define PREBAKE_WIFI_PASS    "{prebake_wifi_pass or ""}"\n'
+                f'#define PREBAKE_DEVICE_TOKEN "{prebake_device_token}"\n'
+            )
+            esp_lib_dir = workspace / "lib" / "ESPPlatform"
+            esp_lib_dir.mkdir(parents=True, exist_ok=True)
+            (esp_lib_dir / "prebake_config.h").write_text(prebake_h)
 
         # Always write (or overwrite) main.cpp with the user's edited code
         (src_dir / "main.cpp").write_text(source_code)

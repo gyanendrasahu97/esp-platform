@@ -1,274 +1,58 @@
 /**
- * ESP Platform Firmware - Main Entry Point
- *
- * Connection State Machine:
- *   BOOT -> CHECK_NVS -> [no creds]  -> BLE_PROVISIONING -> SAVE_NVS -> RESTART
- *                     -> [has creds] -> WIFI_CONNECTING
- *                                          -> [fail]  -> OFFLINE_BUFFERING
- *                                          -> [ok]    -> MQTT_CONNECTING -> CONNECTED
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║            ESP Platform Firmware — main.cpp                  ║
+ * ║  Edit this file to add your sensors, controls, and logic.    ║
+ * ║  All WiFi/MQTT/OTA/BLE/offline-buffer code is in the lib.    ║
+ * ╚══════════════════════════════════════════════════════════════╝
  */
 
-#include <Arduino.h>
-#include <Preferences.h>
-#include <ArduinoJson.h>
-#include <HTTPClient.h>
+#include <ESPPlatform.h>
 
-#include "config.h"
-#include "wifi_manager.h"
-#include "mqtt_client.h"
-#include "sensor_manager.h"
-#include "control_handler.h"
-#include "ota_manager.h"
-#include "offline_buffer.h"
-#include "ble_provisioning.h"
-#include "ui_descriptor.h"
-
-// ---- State Machine ----
-enum class AppState {
-    BOOT,
-    BLE_PROVISIONING,
-    WIFI_CONNECTING,
-    MQTT_CONNECTING,
-    CONNECTED,
-    OFFLINE_BUFFERING,
-};
-
-static AppState appState = AppState::BOOT;
-
-// ---- Stored credentials ----
-static String g_wifiSsid, g_wifiPass;
-static String g_mqttHost, g_deviceToken, g_backendUrl;
-
-// ---- Timers ----
-static unsigned long lastTelemetry  = 0;
-static unsigned long lastOtaCheck   = 0;
-static unsigned long lastBufferFlush = 0;
-
-// ---- Preferences (NVS) ----
-Preferences prefs;
-
-bool loadCredentials() {
-    prefs.begin(NVS_NAMESPACE, true);  // read-only
-    g_wifiSsid    = prefs.getString(NVS_KEY_WIFI_SSID,    "");
-    g_wifiPass    = prefs.getString(NVS_KEY_WIFI_PASS,    "");
-    g_mqttHost    = prefs.getString(NVS_KEY_MQTT_HOST,    "");
-    g_deviceToken = prefs.getString(NVS_KEY_DEVICE_TOKEN, "");
-    g_backendUrl  = prefs.getString(NVS_KEY_BACKEND_URL,  "");
-    prefs.end();
-
-    // Backend URL and MQTT host are fixed for this platform deployment.
-    // Fall back to baked-in defaults if not set via BLE provisioning.
-    if (g_backendUrl.isEmpty()) g_backendUrl = PLATFORM_BACKEND_URL;
-    if (g_mqttHost.isEmpty())   g_mqttHost   = PLATFORM_MQTT_HOST;
-
-    // Only WiFi SSID and device token must come from the user.
-    return !g_wifiSsid.isEmpty() && !g_deviceToken.isEmpty();
-}
-
-void saveCredentials(const ProvisioningData& data) {
-    prefs.begin(NVS_NAMESPACE, false);  // read-write
-    prefs.putString(NVS_KEY_WIFI_SSID,    data.wifiSsid);
-    prefs.putString(NVS_KEY_WIFI_PASS,    data.wifiPass);
-    prefs.putString(NVS_KEY_MQTT_HOST,    data.mqttHost);
-    prefs.putString(NVS_KEY_DEVICE_TOKEN, data.deviceToken);
-    prefs.putString(NVS_KEY_BACKEND_URL,  data.backendUrl);
-    prefs.end();
-    Serial.println("[NVS] Credentials saved");
-}
-
-// ---- Backend heartbeat ----
-void sendHeartbeat() {
-    if (g_backendUrl.isEmpty() || g_deviceToken.isEmpty()) return;
-
-    String url = g_backendUrl + "/api/devices/heartbeat";
-    HTTPClient http;
-    http.begin(url);
-    http.addHeader("Content-Type", "application/json");
-
-    JsonDocument doc;
-    doc["device_token"]     = g_deviceToken;
-    doc["firmware_version"] = FIRMWARE_VERSION;
-    doc["ip_address"]       = wifiManager.getIP();
-
-    String body;
-    serializeJson(doc, body);
-
-    int code = http.POST(body);
-    Serial.printf("[HTTP] Heartbeat -> %d\n", code);
-    http.end();
-}
-
-// ---- Telemetry publish (or buffer if offline) ----
-void publishTelemetry() {
-    JsonDocument doc;
-    sensorManager.readInto(doc);
-    doc["ts"] = millis() / 1000;  // Uptime seconds (replace with NTP time if available)
-
-    String payload;
-    serializeJson(doc, payload);
-
-    String topic = "devices/" + g_deviceToken + "/telemetry";
-
-    if (mqttClient.isConnected()) {
-        mqttClient.publish(topic, payload);
-    } else {
-        offlineBuffer.store(payload);
-        Serial.println("[Buffer] Telemetry stored offline");
-    }
-}
-
-// ---- Flush offline buffer when MQTT is back ----
-void flushOfflineBuffer() {
-    if (!offlineBuffer.hasData()) return;
-    String topic = "devices/" + g_deviceToken + "/telemetry";
-    size_t flushed = offlineBuffer.flush([&](const String& payload) {
-        return mqttClient.publish(topic, payload);
-    });
-    Serial.printf("[Buffer] Flushed %u records\n", flushed);
-}
-
-// ---- MQTT message handler ----
-void onMqttMessage(const String& topic, const String& payload) {
-    if (topic.endsWith("/commands")) {
-        controlHandler.handle(topic, payload);
-    } else if (topic.endsWith("/ota")) {
-        // OTA push from backend
-        JsonDocument doc;
-        deserializeJson(doc, payload);
-        String url = doc["url"] | "";
-        String chk = doc["checksum"] | "";
-        if (!url.isEmpty()) {
-            Serial.printf("[OTA] Push received, applying from: %s\n", url.c_str());
-            otaManager.applyFromUrl(url, chk);
-        }
-    }
-}
+// ── YOUR PIN DEFINITIONS ────────────────────────────────────────────
+// #define RELAY_PIN   5
+// #define TEMP_PIN    4
 
 void setup() {
-    Serial.begin(115200);
-    delay(500);
-    Serial.println("\n\n===== ESP Platform v" FIRMWARE_VERSION " =====");
+    // 1. Register your dashboard / mobile UI controls
+    Platform.addSwitch("LED",         "set_led");
+    Platform.addButton("Blink 3×",    "blink");
+    Platform.addSensor("Temperature", "temperature", "°C");
+    Platform.addSensor("Humidity",    "humidity",    "%");
+    Platform.addButton("Restart",     "restart");
 
-    controlHandler.begin();
-    sensorManager.begin();
-    offlineBuffer.begin();
+    // 2. Start the platform (WiFi / MQTT / BLE provisioning)
+    Platform.begin();
 
-    // BOOT: Check for stored credentials
-    if (loadCredentials()) {
-        Serial.printf("[Boot] Credentials found. WiFi: %s, Token: %s...\n",
-                      g_wifiSsid.c_str(), g_deviceToken.substring(0, 8).c_str());
-        appState = AppState::WIFI_CONNECTING;
-        wifiManager.begin(g_wifiSsid, g_wifiPass);
-    } else {
-        Serial.println("[Boot] No credentials - starting BLE provisioning");
-        appState = AppState::BLE_PROVISIONING;
-
-        bleProvisioning.begin("ESP-Platform", [](const ProvisioningData& data) {
-            saveCredentials(data);
-            bleProvisioning.stop();
-            Serial.println("[Boot] Provisioning done - restarting...");
-            delay(1000);
-            ESP.restart();
-        });
-    }
+    // 3. Your hardware init
+    pinMode(LED_PIN, OUTPUT);
 }
 
 void loop() {
-    switch (appState) {
+    // Must be called every loop — drives WiFi, MQTT, OTA, offline buffer
+    Platform.loop();
 
-        case AppState::BLE_PROVISIONING:
-            // BLE handled via callbacks - nothing to do in loop
-            break;
-
-        case AppState::WIFI_CONNECTING:
-            wifiManager.loop();
-            if (wifiManager.isConnected()) {
-                appState = AppState::MQTT_CONNECTING;
-
-                // One-time actions on WiFi connect
-                sendHeartbeat();
-
-                // Init MQTT
-                mqttClient.begin(g_mqttHost, DEFAULT_MQTT_PORT, g_deviceToken);
-                mqttClient.onMessage(onMqttMessage);
-            } else if (wifiManager.getState() == WiFiState::FAILED) {
-                appState = AppState::OFFLINE_BUFFERING;
-            }
-            break;
-
-        case AppState::MQTT_CONNECTING:
-            wifiManager.loop();
-            mqttClient.loop();
-
-            if (mqttClient.isConnected()) {
-                appState = AppState::CONNECTED;
-
-                // Publish UI descriptor
-                String uiJson = buildUiDescriptor(g_deviceToken);
-                mqttClient.publish("devices/" + g_deviceToken + "/ui", uiJson, true);
-
-                // Flush any offline data
-                flushOfflineBuffer();
-
-                // Init OTA
-                otaManager.begin(g_backendUrl, g_deviceToken);
-            } else if (!wifiManager.isConnected()) {
-                appState = AppState::WIFI_CONNECTING;
-            }
-            break;
-
-        case AppState::CONNECTED:
-            wifiManager.loop();
-            mqttClient.loop();
-
-            // Handle disconnection
-            if (!mqttClient.isConnected()) {
-                appState = AppState::MQTT_CONNECTING;
-                break;
-            }
-            if (!wifiManager.isConnected()) {
-                appState = AppState::WIFI_CONNECTING;
-                break;
-            }
-
-            // Telemetry
-            if (millis() - lastTelemetry >= TELEMETRY_INTERVAL_MS) {
-                publishTelemetry();
-                lastTelemetry = millis();
-            }
-
-            // Flush offline buffer
-            if (millis() - lastBufferFlush >= 10000) {
-                flushOfflineBuffer();
-                lastBufferFlush = millis();
-            }
-
-            // OTA check
-            if (millis() - lastOtaCheck >= OTA_CHECK_INTERVAL_MS) {
-                otaManager.checkAndApply();
-                lastOtaCheck = millis();
-            }
-            break;
-
-        case AppState::OFFLINE_BUFFERING:
-            wifiManager.loop();
-
-            // Keep trying to reconnect WiFi
-            if (wifiManager.isConnected()) {
-                appState = AppState::MQTT_CONNECTING;
-                mqttClient.begin(g_mqttHost, DEFAULT_MQTT_PORT, g_deviceToken);
-                mqttClient.onMessage(onMqttMessage);
-                break;
-            }
-
-            // Buffer telemetry locally
-            if (millis() - lastTelemetry >= TELEMETRY_INTERVAL_MS) {
-                publishTelemetry();  // Will buffer since MQTT not connected
-                lastTelemetry = millis();
-            }
-            break;
-
-        default:
-            break;
+    // Publish telemetry every 5 seconds
+    static unsigned long t = 0;
+    if (millis() - t >= 5000) {
+        Platform.publish("temperature", 22.5f);   // replace with real sensor read
+        Platform.publish("humidity",    65.0f);
+        t = millis();
     }
+}
+
+// ── COMMAND HANDLER ────────────────────────────────────────────────
+// Called when the dashboard or mobile app sends a command to this device.
+//
+//  'action' — the action string defined in addSwitch / addButton / addSlider
+//  'params' — full JSON object, e.g. {"action":"set_led","value":true}
+//
+void onCommand(const String& action, JsonObject params) {
+    if (action == "set_led")  digitalWrite(LED_PIN, (bool)params["value"]);
+    if (action == "blink") {
+        for (int i = 0; i < 3; i++) {
+            digitalWrite(LED_PIN, HIGH); delay(200);
+            digitalWrite(LED_PIN, LOW);  delay(200);
+        }
+    }
+    if (action == "restart") ESP.restart();
 }
