@@ -39,8 +39,11 @@ class MqttManager:
     async def publish(self, topic: str, payload: dict | str):
         if isinstance(payload, dict):
             payload = json.dumps(payload)
-        await mqtt.publish(topic, payload)
-        logger.debug(f"Published to {topic}: {payload[:100]}")
+        try:
+            await mqtt.publish(topic, payload)
+            logger.debug(f"Published to {topic}: {payload[:100]}")
+        except AttributeError:
+            raise RuntimeError("MQTT broker not connected — command could not be delivered")
 
     async def fanout_to_redis(self, device_id: str, data: dict):
         redis = await self.get_redis()

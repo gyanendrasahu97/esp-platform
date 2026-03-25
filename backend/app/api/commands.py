@@ -31,6 +31,9 @@ async def send_command(
     from app.mqtt_client import mqtt_manager
     topic = f"devices/{device.device_token}/commands"
     payload = {"action": body.action, "value": body.value}
-    await mqtt_manager.publish(topic, payload)
+    try:
+        await mqtt_manager.publish(topic, payload)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
     return {"status": "sent", "topic": topic}
