@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Wifi, WifiOff, Activity } from 'lucide-react'
+import { ArrowLeft, Wifi, WifiOff, Activity, Copy, Check } from 'lucide-react'
 import Sidebar from '../components/layout/Sidebar'
 import LiveChart from '../components/LiveChart'
 import ControlPanel from '../components/ControlPanel'
@@ -12,6 +12,13 @@ export default function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [device, setDevice] = useState<Device | null>(null)
   const [loading, setLoading] = useState(true)
+  const [tokenCopied, setTokenCopied] = useState(false)
+
+  const copyToken = (token: string) => {
+    navigator.clipboard.writeText(token)
+    setTokenCopied(true)
+    setTimeout(() => setTokenCopied(false), 2000)
+  }
 
   useEffect(() => {
     if (!id) return
@@ -70,7 +77,16 @@ export default function DeviceDetailPage() {
           <div className="mt-2 text-sm text-slate-500 flex gap-4">
             {device.firmware_version && <span>FW: {device.firmware_version}</span>}
             {device.ip_address && <span>IP: {device.ip_address}</span>}
-            <span>Token: {device.device_token.slice(0, 12)}...</span>
+            <button
+              onClick={() => copyToken(device.device_token)}
+              className="flex items-center gap-1.5 font-mono text-slate-500 hover:text-slate-300 transition-colors"
+              title="Copy device token for BLE provisioning"
+            >
+              {tokenCopied
+                ? <><Check size={11} className="text-green-400" /><span className="text-green-400">Copied!</span></>
+                : <><Copy size={11} />{device.device_token}</>
+              }
+            </button>
           </div>
         </div>
 
