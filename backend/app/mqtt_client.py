@@ -40,10 +40,10 @@ class MqttManager:
         if isinstance(payload, dict):
             payload = json.dumps(payload)
         try:
-            await mqtt.publish(topic, payload)
+            mqtt.publish(topic, payload)  # gmqtt publish is synchronous, not a coroutine
             logger.debug(f"Published to {topic}: {payload[:100]}")
-        except AttributeError:
-            raise RuntimeError("MQTT broker not connected — command could not be delivered")
+        except Exception as e:
+            raise RuntimeError(f"MQTT publish failed: {e}")
 
     async def fanout_to_redis(self, device_id: str, data: dict):
         redis = await self.get_redis()
@@ -77,12 +77,15 @@ async def on_message(client, topic: str, payload: bytes, qos: int, properties):
 
         device_token = parts[1]
         msg_type = parts[2]
-        data = json.loads(payload.decode())
 
+        if msg_type == "status":
+            # LWT payload is a plain string ("online"/"offline"), not JSON
+            await _handle_status(device_token, payload.decode().strip())
+            return
+
+        data = json.loads(payload.decode())
         if msg_type == "telemetry":
             await _handle_telemetry(device_token, data)
-        elif msg_type == "status":
-            await _handle_status(device_token, data)
         elif msg_type == "ui":
             await _handle_ui(device_token, data)
         elif msg_type == "logs":
