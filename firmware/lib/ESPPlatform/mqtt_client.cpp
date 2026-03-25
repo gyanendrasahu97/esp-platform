@@ -10,10 +10,21 @@ static PubSubClient _pubsub(_wifiClient);
 static MqttClient* _instance = nullptr;
 
 void MqttClient::begin(const String& broker, int port, const String& deviceToken) {
+    // Guard against redundant begin() calls with the same config
+    if (_initialized && _broker == broker && _port == port && _deviceToken == deviceToken) {
+        return;
+    }
+
+    // If already connected with different config, disconnect first
+    if (_initialized) {
+        disconnect();
+    }
+
     _broker = broker;
     _port = port;
     _deviceToken = deviceToken;
     _instance = this;
+    _initialized = true;
 
     _pubsub.setServer(broker.c_str(), port);
     _pubsub.setBufferSize(MQTT_MAX_PACKET_SIZE);
@@ -97,6 +108,16 @@ void MqttClient::_scheduleRetry() {
     _nextRetryMs = millis() + _retryDelayMs;
     _retryDelayMs = min(_retryDelayMs * 2, (unsigned long)MQTT_RECONNECT_MAX_MS);
     Serial.printf("[MQTT] Retry in %lu ms\n", _retryDelayMs);
+}
+
+void MqttClient::disconnect() {
+    if (_pubsub.connected()) {
+        _pubsub.disconnect();
+    }
+    _state = MqttState::DISCONNECTED;
+    _retryDelayMs = MQTT_RECONNECT_BASE_MS;
+    _nextRetryMs = 0;
+    Serial.println("[MQTT] Disconnected (clean)");
 }
 
 void MqttClient::_onRawMessage(char* topic, uint8_t* payload, unsigned int length) {

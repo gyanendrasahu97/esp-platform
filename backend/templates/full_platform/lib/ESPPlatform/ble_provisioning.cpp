@@ -11,6 +11,23 @@ static NimBLEServer*     _server    = nullptr;
 static NimBLEService*    _service   = nullptr;
 static NimBLECharacteristic* _statusChar = nullptr;
 
+// ---- Server callbacks — keep connection alive + restart adv on disconnect ----
+class ProvServerCallbacks : public NimBLEServerCallbacks {
+    void onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) override {
+        Serial.printf("[BLE] Client connected: %s\n",
+                      connInfo.getAddress().toString().c_str());
+        // Extend supervision timeout to 32 s so user has plenty of time to fill the form
+        // params: connHandle, minInterval(×1.25ms), maxInterval, latency, supervisionTimeout(×10ms)
+        pServer->updateConnParams(connInfo.getConnHandle(), 24, 48, 0, 3200);
+    }
+    void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) override {
+        Serial.printf("[BLE] Client disconnected (reason %d) — restarting advertising\n", reason);
+        // Restart advertising so phone can reconnect without rebooting ESP32
+        NimBLEDevice::getAdvertising()->start();
+    }
+};
+static ProvServerCallbacks serverCallbacks;
+
 // ---- Write callback helper ----
 class StringCharCallbacks : public NimBLECharacteristicCallbacks {
 public:
@@ -72,12 +89,12 @@ void BleProvisioning::begin(const String& deviceName, ProvisioningDoneCallback o
     NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
 
     _server  = NimBLEDevice::createServer();
+    _server->setCallbacks(&serverCallbacks);  // longer timeout + auto re-advertise
     _service = _server->createService(BLE_SERVICE_UUID);
 
-    auto addChar = [&](const char* uuid, NimBLECharacteristicCallbacks* cb, bool notify = false) {
-        uint32_t props = NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR;
-        if (notify) props |= NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::READ;
-        auto ch = _service->createCharacteristic(uuid, props);
+    auto addChar = [&](const char* uuid, NimBLECharacteristicCallbacks* cb) {
+        auto ch = _service->createCharacteristic(
+            uuid, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
         ch->setCallbacks(cb);
         return ch;
     };
@@ -87,7 +104,7 @@ void BleProvisioning::begin(const String& deviceName, ProvisioningDoneCallback o
     addChar(BLE_CHAR_MQTT_HOST_UUID,    &cb_host);
     addChar(BLE_CHAR_DEVICE_TOKEN_UUID, &cb_token);
     addChar(BLE_CHAR_BACKEND_URL_UUID,  &cb_url);
-    addChar(BLE_CHAR_STATUS_UUID,       &cb_commit);   // Write "commit" to trigger provisioning
+    addChar(BLE_CHAR_STATUS_UUID,       &cb_commit);
 
     _statusChar = _service->createCharacteristic(
         BLE_CHAR_STATUS_UUID,
@@ -99,7 +116,7 @@ void BleProvisioning::begin(const String& deviceName, ProvisioningDoneCallback o
 
     NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
     adv->addServiceUUID(BLE_SERVICE_UUID);
-    adv->setMinInterval(32);  // 20ms — advertise faster for quicker discovery
+    adv->setMinInterval(32);  // 20ms
     adv->setMaxInterval(64);  // 40ms
     adv->start();
 

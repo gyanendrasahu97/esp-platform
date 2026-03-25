@@ -10,7 +10,8 @@ const _charWifiPass        = 'beb5483e-36e1-4688-b7f5-ea07361b26a9';
 const _charMqttHost        = 'beb5483e-36e1-4688-b7f5-ea07361b26aa';
 const _charDeviceToken     = 'beb5483e-36e1-4688-b7f5-ea07361b26ab';
 const _charBackendUrl      = 'beb5483e-36e1-4688-b7f5-ea07361b26ac';
-const _charStatusCommit    = 'beb5483e-36e1-4688-b7f5-ea07361b26ad';
+const _charCommit          = 'beb5483e-36e1-4688-b7f5-ea07361b26ad';
+const _charStatus          = 'beb5483e-36e1-4688-b7f5-ea07361b26ae';
 
 class BleDevice {
   final String id;
@@ -133,7 +134,7 @@ class BleService extends ChangeNotifier {
 
     status = 'Committing...';
     notifyListeners();
-    await write(_charStatusCommit, 'commit');
+    await write(_charCommit, 'commit');
 
     status = 'Provisioning sent! Device will restart.';
     notifyListeners();

@@ -15,6 +15,7 @@ class MqttClient {
 public:
     void begin(const String& broker, int port, const String& deviceToken);
     void loop();
+    void disconnect();
     bool publish(const String& topic, const String& payload, bool retained = false);
     void onMessage(MqttMessageCallback cb) { _callback = cb; }
     bool isConnected() const;
@@ -25,6 +26,7 @@ private:
     int _port = 1883;
     String _deviceToken;
     MqttState _state = MqttState::DISCONNECTED;
+    bool _initialized = false;
     unsigned long _nextRetryMs = 0;
     unsigned long _retryDelayMs = 2000;
     MqttMessageCallback _callback;

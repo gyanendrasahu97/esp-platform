@@ -143,10 +143,10 @@ void ESPPlatform::loop() {
             wifiManager.loop();
             if (wifiManager.isConnected()) {
                 _state = AppState::MQTT_CONNECTING;
-                mqttClient.begin(_mqttHost, DEFAULT_MQTT_PORT, _deviceToken);
-                mqttClient.onMessage([this](const String& topic, const String& payload) {
-                    _onMqttMessage(topic, payload);
-                });
+                // begin() is already called during initial WIFI_CONNECTING;
+                // the guard inside begin() prevents re-initialization with
+                // the same config, so just transition state and let loop()
+                // drive the reconnect via mqtt_client's retry logic.
             }
             break;
 

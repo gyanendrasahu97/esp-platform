@@ -12,13 +12,14 @@ class MqttService extends ChangeNotifier {
   Future<void> connect(String broker, int port, String deviceToken) async {
     _client?.disconnect();
 
-    _client = MqttServerClient.withPort(broker, 'flutter_${DateTime.now().millisecondsSinceEpoch}', port);
+    final clientId = 'flutter_${DateTime.now().millisecondsSinceEpoch}';
+    _client = MqttServerClient.withPort(broker, clientId, port);
     _client!.keepAlivePeriod = 60;
     _client!.autoReconnect = true;
     _client!.logging(on: false);
 
     final connMsg = MqttConnectMessage()
-        .withClientIdentifier('flutter_app')
+        .withClientIdentifier(clientId)
         .startClean();
     _client!.connectionMessage = connMsg;
 

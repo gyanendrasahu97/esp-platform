@@ -21,7 +21,8 @@
 #define BLE_CHAR_MQTT_HOST_UUID    "beb5483e-36e1-4688-b7f5-ea07361b26aa"
 #define BLE_CHAR_DEVICE_TOKEN_UUID "beb5483e-36e1-4688-b7f5-ea07361b26ab"
 #define BLE_CHAR_BACKEND_URL_UUID  "beb5483e-36e1-4688-b7f5-ea07361b26ac"
-#define BLE_CHAR_STATUS_UUID       "beb5483e-36e1-4688-b7f5-ea07361b26ad"
+#define BLE_CHAR_COMMIT_UUID       "beb5483e-36e1-4688-b7f5-ea07361b26ad"
+#define BLE_CHAR_STATUS_UUID       "beb5483e-36e1-4688-b7f5-ea07361b26ae"
 
 // --- Platform Server (fixed for this deployment) ---
 // WiFi credentials still come from BLE provisioning.
