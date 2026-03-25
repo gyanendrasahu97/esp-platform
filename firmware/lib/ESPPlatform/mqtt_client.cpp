@@ -35,7 +35,8 @@ void MqttClient::_connect() {
         statusTopic.c_str(),   // LWT topic
         1,                     // LWT QoS
         true,                  // LWT retain
-        "offline"              // LWT message
+        "offline",             // LWT message
+        false                  // cleanSession=false → broker queues QoS1 commands while offline
     );
 
     if (ok) {

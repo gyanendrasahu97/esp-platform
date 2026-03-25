@@ -40,7 +40,7 @@ class MqttManager:
         if isinstance(payload, dict):
             payload = json.dumps(payload)
         try:
-            mqtt.publish(topic, payload)  # gmqtt publish is synchronous, not a coroutine
+            mqtt.publish(topic, payload, qos=1)  # QoS 1 so broker queues if device is briefly offline
             logger.debug(f"Published to {topic}: {payload[:100]}")
         except Exception as e:
             raise RuntimeError(f"MQTT publish failed: {e}")
