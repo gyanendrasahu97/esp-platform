@@ -1,6 +1,7 @@
 #include "offline_buffer.h"
 #include "config.h"
 #include <LittleFS.h>
+#include <vector>
 
 OfflineBuffer offlineBuffer;
 
