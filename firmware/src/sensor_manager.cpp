@@ -1,5 +1,6 @@
 #include "sensor_manager.h"
 #include "config.h"
+#include <WiFi.h>
 
 SensorManager sensorManager;
 
