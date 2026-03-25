@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import engine
-from app.models import Base  # noqa: F401 - needed to register models with metadata
+from app.database import Base  # noqa: F401 - needed to register models with metadata
 from app.mqtt_client import mqtt
 
 # Import all models so Alembic/Base can see them
@@ -39,7 +39,8 @@ def create_app() -> FastAPI:
     # CORS - allow dashboard dev server
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost"],
+        allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost",
+                       "https://esp.cruzanet.cloud"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
