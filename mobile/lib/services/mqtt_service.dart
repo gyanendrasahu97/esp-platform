@@ -9,7 +9,7 @@ class MqttService extends ChangeNotifier {
   final Map<String, dynamic> latestData = {};
 
   Future<void> connect(String broker, int port, String deviceToken) async {
-    await _client?.disconnect();
+    _client?.disconnect();
 
     _client = MqttServerClient.withPort(broker, 'flutter_${DateTime.now().millisecondsSinceEpoch}', port);
     _client!.keepAlivePeriod = 60;

@@ -19,8 +19,6 @@ class _ProvisionScreenState extends State<ProvisionScreen> {
   @override
   void initState() {
     super.initState();
-    final api = context.read<ApiService>();
-    // Pre-fill backend URL from saved settings
     _ssid.text = '';
   }
 
