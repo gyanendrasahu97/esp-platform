@@ -12,8 +12,8 @@ export default function FlashUsb({ binUrl, buildId }: Props) {
     )
   }
 
-  // Generate manifest URL pointing to our backend endpoint
-  const manifestUrl = `/api/compiler/manifest/${buildId}`
+  // Use absolute URL so ESP Web Tools can always resolve it regardless of deployment topology
+  const manifestUrl = `${window.location.origin}/api/compiler/manifest/${buildId}`
 
   return (
     <div className="flex items-center gap-2">

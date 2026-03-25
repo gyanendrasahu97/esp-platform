@@ -31,12 +31,20 @@ const DEFAULT_CODE = `// ESP Platform - Full Platform Firmware (main.cpp)
 // (This file is replaced by the template's main.cpp on build)
 `
 
+const LS_BUILD_KEY = 'esp_last_build'
+
 export default function EditorPage() {
   const [code, setCode]               = useState(DEFAULT_CODE)
   const [templates, setTemplates]     = useState<Template[]>([])
   const [board, setBoard]             = useState('esp32dev')
   const [building, setBuilding]       = useState(false)
-  const [buildResult, setBuildResult] = useState<BuildResult | null>(null)
+  const [buildResult, setBuildResult] = useState<BuildResult | null>(() => {
+    // Restore last successful build from localStorage so Flash buttons survive a refresh
+    try {
+      const saved = localStorage.getItem(LS_BUILD_KEY)
+      return saved ? JSON.parse(saved) as BuildResult : null
+    } catch { return null }
+  })
   const [output, setOutput]           = useState('')
   const outputRef = useRef<HTMLDivElement>(null)
 
@@ -73,6 +81,10 @@ export default function EditorPage() {
       })
       setBuildResult(data)
       setOutput(data.output)
+      // Persist last build so Flash buttons work after a page refresh
+      if (data.success) {
+        try { localStorage.setItem(LS_BUILD_KEY, JSON.stringify(data)) } catch { /* ignore */ }
+      }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setOutput(`Build request failed: ${msg || 'Unknown error'}`)
@@ -114,6 +126,13 @@ export default function EditorPage() {
           </select>
 
           <div className="flex-1" />
+
+          {/* Restored build indicator */}
+          {buildResult?.success && !output && (
+            <span className="text-xs text-slate-500 italic">
+              Last build: {buildResult.build_id.slice(0, 8)}
+            </span>
+          )}
 
           {/* Build button */}
           <button
