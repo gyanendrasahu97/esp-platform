@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Play, RefreshCw, ChevronDown } from 'lucide-react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
+import { Play, RefreshCw, ChevronDown, BookOpen, Terminal } from 'lucide-react'
 import Sidebar from '../components/layout/Sidebar'
 import CodeEditor from '../components/editor/CodeEditor'
 import FlashUsb from '../components/editor/FlashUsb'
@@ -32,6 +32,188 @@ const DEFAULT_CODE = `// ESP Platform - Full Platform Firmware (main.cpp)
 `
 
 const LS_BUILD_KEY = 'esp_last_build'
+
+// ── Read-only API reference shown in the right panel ──────────────────────────
+const API_REFERENCE = `// ══════════════════════════════════════════════════
+//  ESP PLATFORM  —  API REFERENCE  (read-only)
+// ══════════════════════════════════════════════════
+
+// ── RUNTIME VARIABLES  (available in main.cpp) ──
+//   String  g_deviceToken   Unique device token (UUID)
+//   String  g_backendUrl    Backend URL e.g. "https://esp.cruzanet.cloud"
+//   String  g_mqttHost      MQTT broker hostname
+//   String  g_wifiSsid      Connected WiFi SSID
+
+// ── MQTT ────────────────────────────────────────
+//   mqttClient.publish(topic, payload)    Send a message
+//   mqttClient.isConnected()              true if online
+//
+//   Topics:
+//     "devices/" + g_deviceToken + "/telemetry"  → you publish here
+//     "devices/" + g_deviceToken + "/commands"   → platform reads, calls controlHandler
+//     "devices/" + g_deviceToken + "/ui"         → publish your UI descriptor (retained)
+
+// ── SENSOR MANAGER ──────────────────────────────
+//   sensorManager.readInto(JsonDocument& doc)
+//   // Adds: temperature, humidity, uptime_s, rssi, fw_version
+//   // Edit sensor_manager.cpp to add real sensors
+
+// ── CONTROL HANDLER ─────────────────────────────
+//   controlHandler.handle(topic, payload)
+//   // Built-in actions: set_led, blink, restart
+//   // Edit control_handler.cpp to add custom actions:
+//   //   {"action":"set_relay","value":true}
+//   //   {"action":"set_speed","value":75}
+
+// ── OFFLINE BUFFER ──────────────────────────────
+//   offlineBuffer.store(payload)             Buffer when offline
+//   offlineBuffer.flush(publishFn)           Flush on reconnect
+//   offlineBuffer.hasData()                  true if buffer not empty
+//   offlineBuffer.clear()                    Wipe buffer
+
+// ── OTA MANAGER ─────────────────────────────────
+//   otaManager.checkAndApply()              Poll backend for update
+//   otaManager.applyFromUrl(url, checksum)  Flash from URL directly
+
+// ── UI DESCRIPTOR ───────────────────────────────
+//   String buildUiDescriptor(g_deviceToken)
+//   // Returns JSON for dashboard/mobile dynamic UI
+//   // Edit ui_descriptor.cpp to add/remove controls
+
+// ── WIFI MANAGER ────────────────────────────────
+//   wifiManager.isConnected()    true if WiFi up
+//   wifiManager.getIP()          Local IP as String
+//   wifiManager.getState()       WiFiState enum
+
+// ══════════════════════════════════════════════════
+//  CONFIGURABLE CONSTANTS  (from config.h)
+// ══════════════════════════════════════════════════
+//
+//  Pin assignments:
+#define LED_PIN              2        // Built-in LED (active HIGH)
+#define SENSOR_DHT_PIN       4        // DHT22 data pin
+//
+//  Timing:
+#define TELEMETRY_INTERVAL_MS   5000  // Publish every 5 s
+#define OTA_CHECK_INTERVAL_MS   300000// OTA check every 5 min
+//
+//  Offline buffer:
+#define OFFLINE_BUFFER_MAX_BYTES  524288  // 512 KB
+#define OFFLINE_FLUSH_BATCH       20      // Records per flush
+//
+//  Identity:
+#define FIRMWARE_VERSION  "1.0.0"
+#define DEVICE_NAME       "ESP Platform Device"
+//
+//  To override in main.cpp:
+//    #undef  LED_PIN
+//    #define LED_PIN 5
+//
+// ══════════════════════════════════════════════════
+//  DYNAMIC UI JSON FORMAT
+// ══════════════════════════════════════════════════
+// {
+//   "device_name": "Pump Controller",
+//   "firmware_version": "1.0.0",
+//   "controls": [
+//     {"type":"switch",  "label":"Motor",    "action":"set_motor"},
+//     {"type":"slider",  "label":"Speed",    "action":"set_speed", "min":0,"max":100},
+//     {"type":"sensor",  "label":"Temp",     "key":"temperature",  "unit":"°C"},
+//     {"type":"gauge",   "label":"Moisture", "key":"soil",         "min":0,"max":100},
+//     {"type":"button",  "label":"Reset",    "action":"restart"}
+//   ]
+// }
+// ══════════════════════════════════════════════════
+`
+
+interface RightPanelProps {
+  output: string
+  buildResult: BuildResult | null
+  outputRef: RefObject<HTMLDivElement | null>
+}
+
+function RightPanel({ output, buildResult, outputRef }: RightPanelProps) {
+  const [tab, setTab] = useState<'output' | 'api'>('output')
+
+  // Switch to output tab automatically when a build starts/finishes
+  useEffect(() => { if (output) setTab('output') }, [output])
+
+  return (
+    <div className="w-96 border-l border-slate-800 flex flex-col bg-slate-950">
+      {/* Tab bar */}
+      <div className="flex items-center border-b border-slate-800">
+        <button
+          onClick={() => setTab('output')}
+          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${
+            tab === 'output'
+              ? 'text-white border-b-2 border-blue-500'
+              : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <Terminal size={12} />
+          Build Output
+          {buildResult && (
+            <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+              buildResult.success ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+            }`}>
+              {buildResult.success ? 'OK' : 'ERR'}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setTab('api')}
+          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${
+            tab === 'api'
+              ? 'text-white border-b-2 border-blue-500'
+              : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <BookOpen size={12} />
+          API Reference
+        </button>
+        <div className="flex-1" />
+        {tab === 'api' && (
+          <span className="text-[10px] text-slate-600 pr-2 italic">read-only</span>
+        )}
+      </div>
+
+      {/* Tab content */}
+      {tab === 'output' ? (
+        <div
+          ref={outputRef}
+          className="flex-1 overflow-y-auto p-3 font-mono text-xs text-slate-400 whitespace-pre-wrap leading-relaxed"
+        >
+          {output || <span className="text-slate-600">Build output will appear here...</span>}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-3 font-mono text-xs text-slate-300 whitespace-pre leading-relaxed select-text">
+          {API_REFERENCE.split('\n').map((line, i) => {
+            // Colour code the reference lines
+            if (line.startsWith('// ══') || line.startsWith('// ──')) {
+              return <div key={i} className="text-slate-600">{line}</div>
+            }
+            if (line.startsWith('#define')) {
+              return <div key={i} className="text-yellow-400">{line}</div>
+            }
+            if (line.startsWith('//   ') && !line.includes('//   //')) {
+              const parts = line.match(/^(\/\/\s+)(\S+)(\s+.*)?$/)
+              if (parts) {
+                return (
+                  <div key={i}>
+                    <span className="text-slate-500">{parts[1]}</span>
+                    <span className="text-blue-300">{parts[2]}</span>
+                    <span className="text-slate-400">{parts[3] ?? ''}</span>
+                  </div>
+                )
+              }
+            }
+            return <div key={i} className="text-slate-500">{line}</div>
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function EditorPage() {
   const [code, setCode]               = useState(DEFAULT_CODE)
@@ -156,25 +338,8 @@ export default function EditorPage() {
             <CodeEditor value={code} onChange={setCode} />
           </div>
 
-          {/* Build output panel */}
-          <div className="w-96 border-l border-slate-800 flex flex-col bg-slate-950">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Build Output</span>
-              {buildResult && (
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  buildResult.success ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
-                }`}>
-                  {buildResult.success ? 'SUCCESS' : 'FAILED'}
-                </span>
-              )}
-            </div>
-            <div
-              ref={outputRef}
-              className="flex-1 overflow-y-auto p-3 font-mono text-xs text-slate-400 whitespace-pre-wrap leading-relaxed"
-            >
-              {output || <span className="text-slate-600">Build output will appear here...</span>}
-            </div>
-          </div>
+          {/* Right panel: Build Output / API Reference tabs */}
+          <RightPanel output={output} buildResult={buildResult} outputRef={outputRef} />
         </div>
       </div>
     </div>

@@ -1,11 +1,53 @@
 /**
- * ESP Platform Firmware - Main Entry Point
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║              ESP Platform Firmware - main.cpp                ║
+ * ║   Edit this file to add sensors, controls and custom logic   ║
+ * ╚══════════════════════════════════════════════════════════════╝
  *
- * Connection State Machine:
- *   BOOT -> CHECK_NVS -> [no creds]  -> BLE_PROVISIONING -> SAVE_NVS -> RESTART
- *                     -> [has creds] -> WIFI_CONNECTING
- *                                          -> [fail]  -> OFFLINE_BUFFERING
- *                                          -> [ok]    -> MQTT_CONNECTING -> CONNECTED
+ * ── RUNTIME VARIABLES (loaded from NVS after BLE provisioning) ──
+ *   g_deviceToken   Device's unique token (UUID)
+ *   g_backendUrl    Backend URL  e.g. "https://esp.cruzanet.cloud"
+ *   g_mqttHost      MQTT broker hostname
+ *   g_wifiSsid      Connected WiFi SSID
+ *
+ * ── MQTT ────────────────────────────────────────────────────────
+ *   mqttClient.publish(topic, payload)      Publish a message
+ *   mqttClient.isConnected()                True if MQTT is online
+ *   // Telemetry topic: "devices/" + g_deviceToken + "/telemetry"
+ *   // Commands topic:  "devices/" + g_deviceToken + "/commands"
+ *
+ * ── SENSOR MANAGER ──────────────────────────────────────────────
+ *   sensorManager.readInto(doc)    Fill an ArduinoJson doc with readings
+ *   // Default fields: temperature, humidity, uptime_s, rssi, fw_version
+ *   // Add your own sensor fields inside SensorManager::readInto()
+ *
+ * ── CONTROL HANDLER ─────────────────────────────────────────────
+ *   controlHandler.handle(topic, payload)   Route incoming commands
+ *   // Add custom actions inside ControlHandler::handle()
+ *   // Built-in: set_led, blink, restart
+ *
+ * ── OFFLINE BUFFER ──────────────────────────────────────────────
+ *   offlineBuffer.store(payload)    Buffer JSON when MQTT offline
+ *   offlineBuffer.flush(publishFn)  Flush buffered records
+ *   offlineBuffer.hasData()         True if buffer not empty
+ *
+ * ── UI DESCRIPTOR ───────────────────────────────────────────────
+ *   buildUiDescriptor(g_deviceToken)   Build JSON for dashboard/app UI
+ *   // Edit ui_descriptor.cpp to add/remove dashboard controls
+ *
+ * ── OTA MANAGER ─────────────────────────────────────────────────
+ *   otaManager.checkAndApply()         Poll backend for firmware update
+ *   otaManager.applyFromUrl(url, chk)  Apply OTA from URL directly
+ *
+ * ── CONFIGURABLE CONSTANTS (edit in config.h) ───────────────────
+ *   LED_PIN                   2         Built-in LED (active HIGH)
+ *   SENSOR_DHT_PIN            4         DHT22 data pin
+ *   TELEMETRY_INTERVAL_MS     5000      Publish every 5 s
+ *   OTA_CHECK_INTERVAL_MS     300000    OTA check every 5 min
+ *   OFFLINE_BUFFER_MAX_BYTES  524288    Offline buffer limit (512 KB)
+ *   FIRMWARE_VERSION          "1.0.0"   Firmware version string
+ *   DEVICE_NAME               "ESP Platform Device"
+ * ================================================================
  */
 
 #include <Arduino.h>
@@ -23,6 +65,17 @@
 #include "ble_provisioning.h"
 #include "ui_descriptor.h"
 
+// ================================================================
+//  USER CONFIGURATION  — change these to match your hardware
+// ================================================================
+// #undef  LED_PIN
+// #define LED_PIN        5    // Override built-in LED pin
+// #undef  SENSOR_DHT_PIN
+// #define SENSOR_DHT_PIN 14   // Override DHT22 pin
+// #undef  TELEMETRY_INTERVAL_MS
+// #define TELEMETRY_INTERVAL_MS  10000  // Publish every 10 s instead
+// ================================================================
+
 // ---- State Machine ----
 enum class AppState {
     BOOT,
@@ -35,13 +88,13 @@ enum class AppState {
 
 static AppState appState = AppState::BOOT;
 
-// ---- Stored credentials ----
+// ---- Stored credentials (set by BLE provisioning, loaded from NVS) ----
 static String g_wifiSsid, g_wifiPass;
 static String g_mqttHost, g_deviceToken, g_backendUrl;
 
 // ---- Timers ----
-static unsigned long lastTelemetry  = 0;
-static unsigned long lastOtaCheck   = 0;
+static unsigned long lastTelemetry   = 0;
+static unsigned long lastOtaCheck    = 0;
 static unsigned long lastBufferFlush = 0;
 
 // ---- Preferences (NVS) ----
