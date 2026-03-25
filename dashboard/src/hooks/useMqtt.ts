@@ -12,6 +12,7 @@ const MQTT_URL = window.location.protocol === 'https:' && _rawMqttUrl.startsWith
 export function useMqtt(deviceToken: string | null) {
   const clientRef = useRef<MqttClient | null>(null)
   const [latestData, setLatestData] = useState<Record<string, unknown>>({})
+  const [uiDescriptor, setUiDescriptor] = useState<Record<string, unknown> | null>(null)
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export function useMqtt(deviceToken: string | null) {
       setConnected(true)
       client.subscribe(`devices/${deviceToken}/telemetry`, { qos: 1 })
       client.subscribe(`devices/${deviceToken}/status`, { qos: 1 })
+      client.subscribe(`devices/${deviceToken}/ui`, { qos: 1 })
     })
 
     client.on('message', (topic, payload) => {
@@ -36,6 +38,8 @@ export function useMqtt(deviceToken: string | null) {
         const data = JSON.parse(payload.toString())
         if (topic.endsWith('/telemetry')) {
           setLatestData(data)
+        } else if (topic.endsWith('/ui')) {
+          setUiDescriptor(data)
         }
       } catch {
         // ignore malformed messages
@@ -55,5 +59,5 @@ export function useMqtt(deviceToken: string | null) {
     clientRef.current?.publish(topic, JSON.stringify(payload), { qos: 1 })
   }
 
-  return { latestData, connected, publish }
+  return { latestData, uiDescriptor, connected, publish }
 }

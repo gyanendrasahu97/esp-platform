@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/device.dart';
+import '../models/ui_descriptor.dart';
 import '../services/api_service.dart';
 import '../services/mqtt_service.dart';
 import '../widgets/dynamic_ui.dart';
@@ -16,12 +17,9 @@ class _DeviceScreenState extends State<DeviceScreen> {
   @override
   void initState() {
     super.initState();
-    final api  = context.read<ApiService>();
     final mqtt = context.read<MqttService>();
-    final broker = api.baseUrl
-        .replaceAll('/api', '')
-        .replaceAll('http://', '')
-        .replaceAll('https://', '');
+    // Broker is the MQTT host (port 1883), same domain as the API
+    const broker = 'esp.cruzanet.cloud';
     mqtt.connect(broker, 1883, widget.device.deviceToken);
   }
 
@@ -33,9 +31,15 @@ class _DeviceScreenState extends State<DeviceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mqtt = context.watch<MqttService>();
-    final api  = context.read<ApiService>();
+    final mqtt   = context.watch<MqttService>();
+    final api    = context.read<ApiService>();
     final device = widget.device;
+
+    // Prefer live MQTT descriptor (retain=true → delivered immediately on subscribe),
+    // fall back to the DB-stored value from the initial API fetch
+    final descriptor = mqtt.uiDescriptor != null
+        ? UiDescriptor.fromJson(mqtt.uiDescriptor!)
+        : device.uiDescriptor;
 
     return Scaffold(
       appBar: AppBar(
@@ -60,14 +64,14 @@ class _DeviceScreenState extends State<DeviceScreen> {
           ),
         ],
       ),
-      body: device.uiDescriptor == null
+      body: descriptor == null
           ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.hourglass_empty, size: 48, color: Colors.grey),
               SizedBox(height: 12),
               Text('Waiting for device UI descriptor...', style: TextStyle(color: Colors.grey)),
             ]))
           : DynamicUi(
-              descriptor: device.uiDescriptor!,
+              descriptor: descriptor,
               telemetry: Map<String, dynamic>.from(mqtt.latestData),
               onCommand: (action, value) => api.sendCommand(device.id, action, value),
             ),

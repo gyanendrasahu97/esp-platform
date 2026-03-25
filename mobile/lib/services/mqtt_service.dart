@@ -7,6 +7,7 @@ class MqttService extends ChangeNotifier {
   MqttServerClient? _client;
   bool isConnected = false;
   final Map<String, dynamic> latestData = {};
+  Map<String, dynamic>? uiDescriptor;
 
   Future<void> connect(String broker, int port, String deviceToken) async {
     _client?.disconnect();
@@ -32,17 +33,22 @@ class MqttService extends ChangeNotifier {
       isConnected = true;
       notifyListeners();
 
-      // Subscribe to telemetry
       _client!.subscribe('devices/$deviceToken/telemetry', MqttQos.atLeastOnce);
+      _client!.subscribe('devices/$deviceToken/ui', MqttQos.atLeastOnce);
 
       _client!.updates?.listen((messages) {
         for (final msg in messages) {
+          final topic = msg.topic;
           final payload = MqttPublishPayload.bytesToStringAsString(
             (msg.payload as MqttPublishMessage).payload.message,
           );
           try {
             final data = jsonDecode(payload) as Map<String, dynamic>;
-            latestData.addAll(data);
+            if (topic.endsWith('/ui')) {
+              uiDescriptor = data;
+            } else {
+              latestData.addAll(data);
+            }
             notifyListeners();
           } catch (_) {}
         }
@@ -54,6 +60,7 @@ class MqttService extends ChangeNotifier {
     _client?.disconnect();
     isConnected = false;
     latestData.clear();
+    uiDescriptor = null;
     notifyListeners();
   }
 

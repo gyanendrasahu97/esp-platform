@@ -27,13 +27,11 @@ export default function DeviceDetailPage() {
       .finally(() => setLoading(false))
   }, [id])
 
-  const { latestData, connected } = useMqtt(device?.device_token ?? null)
+  const { latestData, uiDescriptor: mqttUiDescriptor, connected } = useMqtt(device?.device_token ?? null)
 
-  // Merge live sensor values into control panel
-  const enrichedDescriptor = device?.ui_descriptor ? {
-    ...device.ui_descriptor,
-    controls: device.ui_descriptor.controls.map(ctrl => ctrl),
-  } : null
+  // Prefer live MQTT descriptor (retain=true so it arrives immediately on subscribe),
+  // fall back to DB-stored value from initial fetch
+  const enrichedDescriptor = (mqttUiDescriptor ?? device?.ui_descriptor) as typeof device.ui_descriptor | null
 
   if (loading) return (
     <div className="flex h-screen bg-slate-950">
