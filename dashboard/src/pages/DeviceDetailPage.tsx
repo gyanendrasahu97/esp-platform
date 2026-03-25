@@ -6,7 +6,7 @@ import LiveChart from '../components/LiveChart'
 import ControlPanel from '../components/ControlPanel'
 import { useMqtt } from '../hooks/useMqtt'
 import api from '../api/client'
-import type { Device } from '../types'
+import type { Device, UiDescriptor } from '../types'
 
 export default function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -31,7 +31,7 @@ export default function DeviceDetailPage() {
 
   // Prefer live MQTT descriptor (retain=true so it arrives immediately on subscribe),
   // fall back to DB-stored value from initial fetch
-  const enrichedDescriptor = (mqttUiDescriptor ?? device?.ui_descriptor) as typeof device.ui_descriptor | null
+  const enrichedDescriptor = (mqttUiDescriptor ?? device?.ui_descriptor) as UiDescriptor | null
 
   if (loading) return (
     <div className="flex h-screen bg-slate-950">
