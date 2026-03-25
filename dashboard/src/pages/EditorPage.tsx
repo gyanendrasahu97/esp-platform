@@ -15,6 +15,8 @@ const DEFAULT_CODE = `/**
 
 #include <ESPPlatform.h>
 
+#define LED_PIN 2  // GPIO 2 = built-in LED on most ESP32 dev boards
+
 void setup() {
     Platform.addSwitch("LED",         "set_led");
     Platform.addButton("Blink 3x",    "blink");

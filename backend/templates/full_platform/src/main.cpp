@@ -9,6 +9,7 @@
 #include <ESPPlatform.h>
 
 // ── YOUR PIN DEFINITIONS ────────────────────────────────────────────
+#define LED_PIN     2   // GPIO 2 = built-in LED on most ESP32 dev boards
 // #define RELAY_PIN   5
 // #define TEMP_PIN    4
 
