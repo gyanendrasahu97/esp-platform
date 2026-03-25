@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import mqtt, { type MqttClient } from 'mqtt'
 
-// Auto-select wss:// when page is served over HTTPS to avoid mixed-content block
-const _mqttProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-const MQTT_URL = import.meta.env.VITE_MQTT_WS_URL ||
-  `${_mqttProto}://${window.location.host}/mqtt`
+// Default to same-host /mqtt path (proxied by dashboard nginx to mosquitto:9001)
+const _rawMqttUrl = import.meta.env.VITE_MQTT_WS_URL ||
+  `ws://${window.location.host}/mqtt`
+// Force wss:// when page is served over HTTPS — browsers block ws:// mixed content
+const MQTT_URL = window.location.protocol === 'https:' && _rawMqttUrl.startsWith('ws://')
+  ? 'wss://' + _rawMqttUrl.slice(5)
+  : _rawMqttUrl
 
 export function useMqtt(deviceToken: string | null) {
   const clientRef = useRef<MqttClient | null>(null)
