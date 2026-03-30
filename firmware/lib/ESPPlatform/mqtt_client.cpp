@@ -68,9 +68,11 @@ void MqttClient::_connect() {
 void MqttClient::_resubscribe() {
     String commandsTopic = "devices/" + _deviceToken + "/commands";
     String otaTopic      = "devices/" + _deviceToken + "/ota";
+    String rulesTopic    = "devices/" + _deviceToken + "/rules";
     _pubsub.subscribe(commandsTopic.c_str(), 1);
     _pubsub.subscribe(otaTopic.c_str(), 1);
-    Serial.println("[MQTT] Subscribed to commands + ota topics");
+    _pubsub.subscribe(rulesTopic.c_str(), 1);
+    Serial.println("[MQTT] Subscribed to commands + ota + rules topics");
 }
 
 void MqttClient::loop() {

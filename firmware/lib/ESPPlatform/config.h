@@ -34,7 +34,7 @@
 // --- Default Connection Settings ---
 #define DEFAULT_MQTT_PORT     1883
 #define MQTT_KEEPALIVE_S      60
-#define MQTT_MAX_PACKET_SIZE  512
+#define MQTT_MAX_PACKET_SIZE  4096
 
 // --- Reconnect Settings ---
 #define WIFI_RECONNECT_BASE_MS   1000
