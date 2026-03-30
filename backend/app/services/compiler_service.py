@@ -27,6 +27,7 @@ lib_deps =
 upload_speed = 921600
 build_flags =
     -DCORE_DEBUG_LEVEL=0
+    -DMQTT_MAX_PACKET_SIZE=4096
 """
 
 # In-memory store of running build processes (build_id -> asyncio.Queue)
