@@ -10,13 +10,15 @@ import type { Device, UiControl } from '../types'
 type ControlType = UiControl['type']
 
 interface RuleTrigger {
-  type: 'command' | 'telemetry' | 'timer' | 'boot'
+  type: 'command' | 'telemetry' | 'timer' | 'boot' | 'time'
   key?: string
   op?: 'gt' | 'lt' | 'eq' | 'gte' | 'lte' | 'between'
   threshold?: number
   threshold2?: number
   interval_ms?: number
   value?: boolean
+  hour?: number    // for time trigger (0-23)
+  minute?: number  // for time trigger (0-59)
 }
 
 interface RuleAction {
@@ -254,6 +256,7 @@ function TriggerEditor({ trigger, onChange }: { trigger: RuleTrigger; onChange: 
             <option value="telemetry">Telemetry value</option>
             <option value="command">Command received</option>
             <option value="timer">Timer (repeating)</option>
+            <option value="time">Time of day (NTP)</option>
             <option value="boot">On boot</option>
           </select>
         </div>
@@ -328,6 +331,29 @@ function TriggerEditor({ trigger, onChange }: { trigger: RuleTrigger; onChange: 
               min={100}
               onChange={e => onChange({ ...trigger, interval_ms: Number(e.target.value) })}
             />
+          </div>
+        )}
+        {trigger.type === 'time' && (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Hour (0–23)</label>
+              <input type="number"
+                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white"
+                value={trigger.hour ?? 8}
+                min={0} max={23}
+                onChange={e => onChange({ ...trigger, hour: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Minute (0–59)</label>
+              <input type="number"
+                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white"
+                value={trigger.minute ?? 0}
+                min={0} max={59}
+                onChange={e => onChange({ ...trigger, minute: Number(e.target.value) })}
+              />
+            </div>
+            <p className="col-span-2 text-xs text-slate-500">Fires once per day at this local time. Requires NTP sync.</p>
           </div>
         )}
       </div>

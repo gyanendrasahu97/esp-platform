@@ -1,4 +1,5 @@
 #include "rules_engine.h"
+#include "ntp_clock.h"
 #include <Arduino.h>
 
 void RulesEngine::loadRules(const String& json) {
@@ -24,6 +25,8 @@ void RulesEngine::_parseRule(JsonObject obj) {
     rule.trigger.threshold  = trig["threshold"]  | 0.0f;
     rule.trigger.threshold2 = trig["threshold2"] | 0.0f;
     rule.trigger.intervalMs = trig["interval_ms"] | 0UL;
+    rule.trigger.timeHour   = trig["hour"]   | -1;
+    rule.trigger.timeMinute = trig["minute"] | -1;
     if (trig.containsKey("value")) {
         rule.trigger.matchValue = true;
         rule.trigger.boolValue  = trig["value"].as<bool>();
@@ -75,6 +78,21 @@ void RulesEngine::tick() {
         if (rule.trigger.type == "timer" && rule.trigger.intervalMs > 0) {
             if (now - rule.lastFireMs >= rule.trigger.intervalMs) {
                 rule.lastFireMs = now;
+                _executeActions(rule, 0);
+            }
+        }
+    }
+
+    // Fire time-of-day triggers (requires NTP sync)
+    if (ntpClock.isSynced()) {
+        struct tm t = ntpClock.getLocalTime();
+        int currentMinute = t.tm_hour * 60 + t.tm_min;
+        for (auto& rule : _rules) {
+            if (rule.trigger.type != "time") continue;
+            bool hourMatch   = (rule.trigger.timeHour   == -1 || rule.trigger.timeHour   == t.tm_hour);
+            bool minuteMatch = (rule.trigger.timeMinute == -1 || rule.trigger.timeMinute == t.tm_min);
+            if (hourMatch && minuteMatch && rule.lastFiredMinute != currentMinute) {
+                rule.lastFiredMinute = currentMinute;
                 _executeActions(rule, 0);
             }
         }

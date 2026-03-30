@@ -55,6 +55,17 @@
 #define LED_PIN         2   // Built-in LED (active HIGH on most ESP32 boards)
 #define SENSOR_DHT_PIN  4   // DHT22 data pin (change as needed)
 
+// --- NTP / Clock ---
+// GMT offset in seconds. Examples:
+//   UTC        =      0
+//   UTC+5:30   =  19800  (India)
+//   UTC+8      =  28800  (China/Singapore/PH)
+//   UTC-5      = -18000  (US Eastern)
+//   UTC+1      =   3600  (Central Europe)
+#define NTP_GMT_OFFSET_SEC      0
+#define NTP_DAYLIGHT_OFFSET_SEC 0
+#define NTP_SERVER              "pool.ntp.org"
+
 // --- Firmware ---
 #define FIRMWARE_VERSION  "1.0.0"
 #define DEVICE_NAME       "ESP Platform Device"

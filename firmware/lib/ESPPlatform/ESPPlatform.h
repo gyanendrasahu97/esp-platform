@@ -94,6 +94,13 @@ public:
     // Publish a log message to devices/{token}/logs (also prints to Serial)
     void log(const String& message);
 
+    // ── NTP / Clock ────────────────────────────────────────────────────────────
+    // Time is synced automatically after WiFi connects.
+    // Set NTP_GMT_OFFSET_SEC in config.h for your timezone.
+    bool   isTimeSynced()    const;  // true after first NTP sync
+    time_t getUnixTime()     const;  // seconds since epoch (0 if not synced)
+    String getIsoTimestamp() const;  // "2024-03-30T14:25:00Z" (UTC)
+
     // Accessible from main.cpp if needed
     String _deviceToken;
     String _backendUrl;

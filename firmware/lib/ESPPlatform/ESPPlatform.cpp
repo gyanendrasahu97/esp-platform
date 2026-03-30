@@ -7,6 +7,7 @@
 #include "ble_provisioning.h"
 #include "ota_manager.h"
 #include "offline_buffer.h"
+#include "ntp_clock.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -114,6 +115,7 @@ void ESPPlatform::loop() {
             wifiManager.loop();
             if (wifiManager.isConnected()) {
                 _state = AppState::MQTT_CONNECTING;
+                ntpClock.begin(NTP_GMT_OFFSET_SEC, NTP_DAYLIGHT_OFFSET_SEC, NTP_SERVER);
                 _sendHeartbeat();
                 mqttClient.begin(_mqttHost, DEFAULT_MQTT_PORT, _deviceToken);
                 mqttClient.onMessage([this](const String& topic, const String& payload) {
@@ -300,6 +302,10 @@ bool ESPPlatform::isConnected() const {
     return mqttClient.isConnected();
 }
 
+bool   ESPPlatform::isTimeSynced()    const { return ntpClock.isSynced(); }
+time_t ESPPlatform::getUnixTime()     const { return ntpClock.getUnixTime(); }
+String ESPPlatform::getIsoTimestamp() const { return ntpClock.getIsoString(); }
+
 void ESPPlatform::log(const String& message) {
     Serial.printf("[Log] %s\n", message.c_str());
     if (!mqttClient.isConnected()) return;
@@ -314,6 +320,12 @@ void ESPPlatform::log(const String& message) {
 // ── Private helpers ────────────────────────────────────────────────────────────
 
 bool ESPPlatform::_publishDoc(JsonDocument& doc) {
+    // Attach real timestamp when NTP is synced, fallback to uptime
+    if (ntpClock.isSynced()) {
+        doc["ts"] = ntpClock.getUnixTime();
+    } else {
+        doc["uptime_ms"] = millis();
+    }
     String payload;
     serializeJson(doc, payload);
     String topic = "devices/" + _deviceToken + "/telemetry";

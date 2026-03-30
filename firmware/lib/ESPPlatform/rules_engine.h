@@ -41,7 +41,7 @@ struct RuleAction {
 };
 
 struct RuleTrigger {
-    String type;       // command | telemetry | timer | boot | connected
+    String type;       // command | telemetry | timer | boot | time
     String key;        // for command / telemetry
     String op;         // for telemetry: gt | lt | eq | between
     float  threshold = 0;
@@ -49,6 +49,8 @@ struct RuleTrigger {
     bool   boolValue = false; // for command value match
     bool   matchValue = false; // if false, any value triggers
     unsigned long intervalMs = 0;  // for timer
+    int    timeHour   = -1;  // for time trigger: 0-23 (-1 = any)
+    int    timeMinute = -1;  // for time trigger: 0-59 (-1 = any)
 };
 
 struct Rule {
@@ -57,6 +59,7 @@ struct Rule {
     std::vector<RuleAction> actions;
     // Timer state
     unsigned long lastFireMs = 0;
+    int lastFiredMinute = -1;  // for time trigger — prevent double-fire within same minute
     // Pending delayed actions: {executeAtMs, actionIndex}
     std::vector<std::pair<unsigned long, RuleAction>> pending;
 };
