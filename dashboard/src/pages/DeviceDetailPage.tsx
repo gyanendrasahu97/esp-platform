@@ -41,13 +41,11 @@ export default function DeviceDetailPage() {
 
   const units = useMemo(() => {
     const map: Record<string, string> = {}
-    if (enrichedDescriptor?.tabs) {
-      enrichedDescriptor.tabs.forEach((tab: any) => {
-        tab.controls?.forEach((ctrl: any) => {
-          if (ctrl.key && ctrl.unit) {
-            map[ctrl.key] = ctrl.unit
-          }
-        })
+    if (enrichedDescriptor?.controls) {
+      enrichedDescriptor.controls.forEach((ctrl) => {
+        if (ctrl.key && ctrl.unit) {
+          map[ctrl.key] = ctrl.unit
+        }
       })
     }
     return map
