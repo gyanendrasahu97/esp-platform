@@ -24,6 +24,8 @@ lib_deps =
     knolleary/PubSubClient@^2.8
     bblanchon/ArduinoJson@^7.0
     NimBLE-Arduino
+    adafruit/DHT sensor library@^1.4.6
+    adafruit/Adafruit Unified Sensor@^1.1.14
 upload_speed = 921600
 build_flags =
     -DCORE_DEBUG_LEVEL=0
