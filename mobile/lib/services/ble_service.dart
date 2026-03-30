@@ -95,11 +95,27 @@ class BleService extends ChangeNotifier {
     await completer.future;
   }
 
+  /// Read the token already stored on the device (returns '' if unset or unreadable).
+  Future<String> readExistingToken() async {
+    if (!isConnected || connectedDeviceId == null) return '';
+    final char = QualifiedCharacteristic(
+      serviceId: Uuid.parse(_serviceUuid),
+      characteristicId: Uuid.parse(_charDeviceToken),
+      deviceId: connectedDeviceId!,
+    );
+    try {
+      final bytes = await _ble.readCharacteristic(char);
+      return utf8.decode(bytes);
+    } catch (_) {
+      return '';
+    }
+  }
+
   Future<void> provision({
     required String wifiSsid,
     required String wifiPass,
     required String mqttHost,
-    required String deviceToken,
+    required String deviceToken,  // empty = keep existing token on device
     required String backendUrl,
   }) async {
     if (!isConnected || connectedDeviceId == null) {
@@ -127,9 +143,12 @@ class BleService extends ChangeNotifier {
     notifyListeners();
     await write(_charMqttHost, mqttHost);
 
-    status = 'Sending device token...';
-    notifyListeners();
-    await write(_charDeviceToken, deviceToken);
+    // Only write token if provided — if empty, device already has it (prebaked/NVS)
+    if (deviceToken.isNotEmpty) {
+      status = 'Sending device token...';
+      notifyListeners();
+      await write(_charDeviceToken, deviceToken);
+    }
     await write(_charBackendUrl, backendUrl);
 
     status = 'Committing...';

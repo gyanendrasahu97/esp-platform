@@ -27,7 +27,7 @@ export default function DeviceDetailPage() {
       .finally(() => setLoading(false))
   }, [id])
 
-  const { latestData, uiDescriptor: mqttUiDescriptor, connected } = useMqtt(device?.device_token ?? null)
+  const { latestData, uiDescriptor: mqttUiDescriptor, connected, publish } = useMqtt(device?.device_token ?? null)
 
   // Prefer live MQTT descriptor (retain=true so it arrives immediately on subscribe),
   // fall back to DB-stored value from initial fetch
@@ -123,7 +123,8 @@ export default function DeviceDetailPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
             <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">Controls</h2>
             <ControlPanel
-              deviceId={device.id}
+              deviceToken={device.device_token}
+              publish={publish}
               descriptor={enrichedDescriptor}
               latestData={latestData}
             />

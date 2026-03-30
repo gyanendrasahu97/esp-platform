@@ -73,13 +73,19 @@ void ESPPlatform::begin() {
         Serial.println("[Boot] No credentials — starting BLE provisioning");
         _state = AppState::BLE_PROVISIONING;
 
-        bleProvisioning.begin("ESP-Platform", [this](const ProvisioningData& data) {
-            _saveCredentials(data);
-            bleProvisioning.stop();
-            Serial.println("[Boot] Provisioning done — restarting...");
-            delay(1000);
-            ESP.restart();
-        });
+        bleProvisioning.begin("ESP-Platform",
+            _deviceToken,   // existing (from NVS or prebake) — mobile reads and skips if non-empty
+            _mqttHost,
+            _backendUrl,
+            [this](const ProvisioningData& data) {
+                // Save creds and set flag — do NOT stop BLE or restart here.
+                // We are inside a GATT write callback; tearing down BLE now would
+                // prevent the GATT ACK from reaching the phone (→ GATT error 133).
+                // loop() will handle the restart once the callback has returned.
+                _saveCredentials(data);
+                _provisioningDone = true;
+                Serial.println("[BLE] Credentials saved — restarting from loop()");
+            });
     }
 }
 
@@ -93,7 +99,15 @@ void ESPPlatform::loop() {
     switch (_state) {
 
         case AppState::BLE_PROVISIONING:
-            // BLE handled via callbacks
+            if (_provisioningDone) {
+                // Give the BLE stack ~500 ms to send the GATT ACK to the phone
+                // before we tear it down, otherwise the phone gets GATT error 133.
+                delay(500);
+                bleProvisioning.stop();
+                delay(300);
+                Serial.println("[Boot] Provisioning done — restarting...");
+                ESP.restart();
+            }
             break;
 
         case AppState::WIFI_CONNECTING:
@@ -307,14 +321,30 @@ bool ESPPlatform::_loadCredentials() {
     _backendUrl  = _prefs.getString(NVS_KEY_BACKEND_URL,  "");
     _prefs.end();
 
+    bool needsSave = false;
+
+    // Token and WiFi are independent — each has its own #ifdef so
+    // defining only PREBAKE_DEVICE_TOKEN still works without WiFi prebake.
+#ifdef PREBAKE_DEVICE_TOKEN
+    if (_deviceToken.isEmpty()) { _deviceToken = String(PREBAKE_DEVICE_TOKEN); needsSave = true; }
+#endif
 #ifdef PREBAKE_WIFI_SSID
-    if (_wifiSsid.isEmpty())    _wifiSsid    = String(PREBAKE_WIFI_SSID);
-    if (_wifiPass.isEmpty())    _wifiPass    = String(PREBAKE_WIFI_PASS);
-    if (_deviceToken.isEmpty()) _deviceToken = String(PREBAKE_DEVICE_TOKEN);
+    if (_wifiSsid.isEmpty()) { _wifiSsid = String(PREBAKE_WIFI_SSID); needsSave = true; }
+    if (_wifiPass.isEmpty()) { _wifiPass = String(PREBAKE_WIFI_PASS); needsSave = true; }
 #endif
 
     if (_backendUrl.isEmpty()) _backendUrl = PLATFORM_BACKEND_URL;
     if (_mqttHost.isEmpty())   _mqttHost   = PLATFORM_MQTT_HOST;
+
+    // Persist prebaked values to NVS so they survive OTA updates without prebake macros
+    if (needsSave) {
+        _prefs.begin(NVS_NAMESPACE, false);
+        if (!_deviceToken.isEmpty()) _prefs.putString(NVS_KEY_DEVICE_TOKEN, _deviceToken);
+        if (!_wifiSsid.isEmpty())    _prefs.putString(NVS_KEY_WIFI_SSID,    _wifiSsid);
+        if (!_wifiPass.isEmpty())    _prefs.putString(NVS_KEY_WIFI_PASS,    _wifiPass);
+        _prefs.end();
+        Serial.println("[NVS] Prebaked credentials persisted to NVS");
+    }
 
     return !_wifiSsid.isEmpty() && !_deviceToken.isEmpty();
 }

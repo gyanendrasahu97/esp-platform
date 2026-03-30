@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/device.dart';
 import '../models/ui_descriptor.dart';
-import '../services/api_service.dart';
 import '../services/mqtt_service.dart';
 import '../widgets/dynamic_ui.dart';
 
@@ -32,7 +31,6 @@ class _DeviceScreenState extends State<DeviceScreen> {
   @override
   Widget build(BuildContext context) {
     final mqtt   = context.watch<MqttService>();
-    final api    = context.read<ApiService>();
     final device = widget.device;
 
     // Prefer live MQTT descriptor (retain=true → delivered immediately on subscribe),
@@ -73,7 +71,10 @@ class _DeviceScreenState extends State<DeviceScreen> {
           : DynamicUi(
               descriptor: descriptor,
               telemetry: Map<String, dynamic>.from(mqtt.latestData),
-              onCommand: (action, value) => api.sendCommand(device.id, action, value),
+              onCommand: (action, value) async => mqtt.publish(
+                'devices/${device.deviceToken}/commands',
+                {'action': action, 'value': value},
+              ),
             ),
     );
   }

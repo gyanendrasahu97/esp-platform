@@ -29,6 +29,7 @@ mqtt = FastMQTT(config=mqtt_config)
 class MqttManager:
     def __init__(self):
         self._redis = None
+        self._connected = False
 
     async def get_redis(self):
         if self._redis is None:
@@ -36,11 +37,13 @@ class MqttManager:
             self._redis = aioredis.from_url(settings.redis_url, decode_responses=True)
         return self._redis
 
-    async def publish(self, topic: str, payload: dict | str):
+    async def publish(self, topic: str, payload: dict | str, qos: int = 1, retain: bool = False):
+        if not self._connected:
+            raise RuntimeError("MQTT broker not connected")
         if isinstance(payload, dict):
             payload = json.dumps(payload)
         try:
-            mqtt.publish(topic, payload, qos=1)  # QoS 1 so broker queues if device is briefly offline
+            mqtt.publish(topic, payload, qos=qos, retain=retain)
             logger.debug(f"Published to {topic}: {payload[:100]}")
         except Exception as e:
             raise RuntimeError(f"MQTT publish failed: {e}")
@@ -57,6 +60,7 @@ mqtt_manager = MqttManager()
 @mqtt.on_connect()
 def on_connect(client, flags, rc, properties):
     logger.info(f"MQTT connected: rc={rc}")
+    mqtt_manager._connected = True
     mqtt.client.subscribe("devices/+/telemetry", qos=1)
     mqtt.client.subscribe("devices/+/status", qos=1)
     mqtt.client.subscribe("devices/+/ui", qos=1)
@@ -66,6 +70,7 @@ def on_connect(client, flags, rc, properties):
 @mqtt.on_disconnect()
 def on_disconnect(client, packet, exc=None):
     logger.warning(f"MQTT disconnected: {exc}")
+    mqtt_manager._connected = False
 
 
 @mqtt.on_message()

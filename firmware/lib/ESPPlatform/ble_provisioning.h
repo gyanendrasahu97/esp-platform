@@ -14,7 +14,11 @@ using ProvisioningDoneCallback = std::function<void(const ProvisioningData&)>;
 
 class BleProvisioning {
 public:
-    void begin(const String& deviceName, ProvisioningDoneCallback onDone);
+    void begin(const String& deviceName,
+               const String& existingToken,
+               const String& existingMqttHost,
+               const String& existingBackendUrl,
+               ProvisioningDoneCallback onDone);
     void stop();
     bool isActive() const { return _active; }
 

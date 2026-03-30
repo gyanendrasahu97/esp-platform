@@ -1,27 +1,32 @@
 import { useState } from 'react'
-import { Power, Play, Sliders } from 'lucide-react'
-import api from '../api/client'
+import { Power, Play, Sliders, AlertCircle } from 'lucide-react'
 import type { UiControl, UiDescriptor } from '../types'
 
 interface Props {
-  deviceId: string
+  deviceToken: string
+  publish: (topic: string, payload: object) => void
   descriptor: UiDescriptor | null
   latestData?: Record<string, unknown>
 }
 
-export default function ControlPanel({ deviceId, descriptor, latestData = {} }: Props) {
+export default function ControlPanel({ deviceToken, publish, descriptor, latestData = {} }: Props) {
   const [localValues, setLocalValues] = useState<Record<string, unknown>>({})
   const [sending, setSending] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Device-reported state (from MQTT telemetry) takes priority over local optimistic state
   const values = { ...localValues, ...latestData }
 
-  const sendCommand = async (action: string, value: unknown) => {
+  const sendCommand = (action: string, value: unknown) => {
+    const prevValues = { ...localValues }
     setSending(action)
+    setError(null)
     try {
-      await api.post(`/devices/${deviceId}/command`, { action, value })
+      publish(`devices/${deviceToken}/commands`, { action, value })
     } catch (err) {
       console.error('Command failed', err)
+      setLocalValues(prevValues)
+      setError('Command failed — check MQTT connection')
     } finally {
       setSending(null)
     }
@@ -37,6 +42,11 @@ export default function ControlPanel({ deviceId, descriptor, latestData = {} }: 
 
   return (
     <div className="grid grid-cols-2 gap-3">
+      {error && (
+        <div className="col-span-2 flex items-center gap-2 text-xs text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">
+          <AlertCircle size={12} /> {error}
+        </div>
+      )}
       {descriptor.controls.map((ctrl, i) => (
         <ControlWidget
           key={i}

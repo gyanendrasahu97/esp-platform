@@ -20,7 +20,7 @@ export function useMqtt(deviceToken: string | null) {
 
     const client = mqtt.connect(MQTT_URL, {
       clientId: `dashboard_${Math.random().toString(16).slice(2)}`,
-      clean: true,
+      clean: false,
       reconnectPeriod: 3000,
     })
 

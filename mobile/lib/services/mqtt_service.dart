@@ -19,8 +19,7 @@ class MqttService extends ChangeNotifier {
     _client!.logging(on: false);
 
     final connMsg = MqttConnectMessage()
-        .withClientIdentifier(clientId)
-        .startClean();
+        .withClientIdentifier(clientId);
     _client!.connectionMessage = connMsg;
 
     try {
@@ -55,6 +54,13 @@ class MqttService extends ChangeNotifier {
         }
       });
     }
+  }
+
+  void publish(String topic, Map<String, dynamic> payload) {
+    if (_client == null || !isConnected) return;
+    final builder = MqttClientPayloadBuilder();
+    builder.addString(jsonEncode(payload));
+    _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
   }
 
   Future<void> disconnect() async {

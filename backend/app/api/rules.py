@@ -68,7 +68,7 @@ async def update_rules(
     from app.mqtt_client import mqtt_manager
     topic = f"devices/{device.device_token}/rules"
     try:
-        mqtt_manager.publish(topic, json.dumps(rules_dict), qos=1, retain=True)
+        await mqtt_manager.publish(topic, json.dumps(rules_dict), qos=1, retain=True)
     except Exception:
         pass
 

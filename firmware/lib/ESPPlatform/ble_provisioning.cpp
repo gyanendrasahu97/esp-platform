@@ -78,7 +78,17 @@ static StringCharCallbacks cb_token (&_deviceToken);
 static StringCharCallbacks cb_url   (&_backendUrl);
 static CommitCharCallbacks  cb_commit;
 
-void BleProvisioning::begin(const String& deviceName, ProvisioningDoneCallback onDone) {
+void BleProvisioning::begin(const String& deviceName,
+                            const String& existingToken,
+                            const String& existingMqttHost,
+                            const String& existingBackendUrl,
+                            ProvisioningDoneCallback onDone) {
+    // Pre-populate static vars so commit works without re-writing unchanged fields
+    // and mobile can read back values already stored on the device.
+    _deviceToken = existingToken;
+    _mqttHost    = existingMqttHost;
+    _backendUrl  = existingBackendUrl;
+
     _doneCallback = onDone;
     _active = true;
 
@@ -99,12 +109,19 @@ void BleProvisioning::begin(const String& deviceName, ProvisioningDoneCallback o
         return ch;
     };
 
-    addChar(BLE_CHAR_WIFI_SSID_UUID,    &cb_ssid);
-    addChar(BLE_CHAR_WIFI_PASS_UUID,    &cb_pass);
-    addChar(BLE_CHAR_MQTT_HOST_UUID,    &cb_host);
-    addChar(BLE_CHAR_DEVICE_TOKEN_UUID, &cb_token);
-    addChar(BLE_CHAR_BACKEND_URL_UUID,  &cb_url);
-    addChar(BLE_CHAR_COMMIT_UUID,       &cb_commit);
+    addChar(BLE_CHAR_WIFI_SSID_UUID, &cb_ssid);
+    addChar(BLE_CHAR_WIFI_PASS_UUID, &cb_pass);
+    addChar(BLE_CHAR_MQTT_HOST_UUID, &cb_host);
+
+    // Token char: READ + WRITE so mobile can read existing token and skip re-entering it
+    auto tokenChar = _service->createCharacteristic(
+        BLE_CHAR_DEVICE_TOKEN_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    tokenChar->setValue(existingToken.c_str());  // mobile reads this immediately on connect
+    tokenChar->setCallbacks(&cb_token);
+
+    addChar(BLE_CHAR_BACKEND_URL_UUID, &cb_url);
+    addChar(BLE_CHAR_COMMIT_UUID,      &cb_commit);
 
     _statusChar = _service->createCharacteristic(
         BLE_CHAR_STATUS_UUID,

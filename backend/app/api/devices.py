@@ -118,7 +118,7 @@ async def update_device_ui(
     from app.mqtt_client import mqtt_manager
     topic = f"devices/{device.device_token}/ui"
     try:
-        mqtt_manager.publish(topic, json.dumps(body), qos=1, retain=True)
+        await mqtt_manager.publish(topic, json.dumps(body), qos=1, retain=True)
     except Exception:
         pass  # Still saved to DB even if MQTT fails
 

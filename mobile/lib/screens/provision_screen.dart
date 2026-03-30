@@ -13,8 +13,26 @@ class _ProvisionScreenState extends State<ProvisionScreen> {
   final _ssid  = TextEditingController();
   final _pass  = TextEditingController();
   final _token = TextEditingController();
-  bool _sending = false;
-  bool _done    = false;
+  bool _sending      = false;
+  bool _done         = false;
+  bool _tokenPreset  = false;  // true if device already has a token
+
+  @override
+  void initState() {
+    super.initState();
+    _readExistingToken();
+  }
+
+  Future<void> _readExistingToken() async {
+    final ble = context.read<BleService>();
+    final existing = await ble.readExistingToken();
+    if (existing.isNotEmpty && mounted) {
+      setState(() {
+        _tokenPreset = true;
+        _token.text = existing;
+      });
+    }
+  }
 
   Future<void> _reconnectAndProvision() async {
     final ble = context.read<BleService>();
@@ -36,9 +54,14 @@ class _ProvisionScreenState extends State<ProvisionScreen> {
   }
 
   Future<void> _provision() async {
-    if (_ssid.text.isEmpty || _token.text.isEmpty) {
+    if (_ssid.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('WiFi SSID and Device Token are required')));
+        const SnackBar(content: Text('WiFi SSID is required')));
+      return;
+    }
+    if (!_tokenPreset && _token.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Device Token is required')));
       return;
     }
     setState(() { _sending = true; });
@@ -57,7 +80,7 @@ class _ProvisionScreenState extends State<ProvisionScreen> {
         wifiSsid:    _ssid.text.trim(),
         wifiPass:    _pass.text,
         mqttHost:    api.baseUrl.replaceAll('/api', '').replaceAll('http://', '').replaceAll('https://', ''),
-        deviceToken: _token.text.trim(),
+        deviceToken: _tokenPreset ? '' : _token.text.trim(),  // empty = keep existing
         backendUrl:  api.baseUrl.replaceAll('/api', ''),
       );
       if (mounted) setState(() { _done = true; });
@@ -158,13 +181,32 @@ class _ProvisionScreenState extends State<ProvisionScreen> {
               obscureText: true),
             const SizedBox(height: 24),
             const Text('Device Token', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            const Text('Copy from the ESP Platform dashboard → Device → Token',
-              style: TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 8),
-            TextField(controller: _token,
-              decoration: const InputDecoration(
-                labelText: 'Device Token', hintText: 'xxxxxxxx-xxxx-...')),
+            if (_tokenPreset)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.shade600),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    'Token already set on device',
+                    style: TextStyle(color: Colors.green.shade300, fontSize: 13),
+                  )),
+                ]),
+              )
+            else ...[
+              const Text('Copy from the ESP Platform dashboard → Device → Token',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 8),
+              TextField(controller: _token,
+                decoration: const InputDecoration(
+                  labelText: 'Device Token', hintText: 'xxxxxxxx-xxxx-...')),
+            ],
             const SizedBox(height: 32),
 
             ElevatedButton(

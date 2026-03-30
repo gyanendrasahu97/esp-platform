@@ -101,6 +101,7 @@ private:
         MQTT_CONNECTING, CONNECTED, OFFLINE_BUFFERING
     };
     AppState _state = AppState::BOOT;
+    bool _provisioningDone = false;  // set in BLE callback, acted on in loop()
 
     String _wifiSsid, _wifiPass, _mqttHost;
     unsigned long _lastOtaCheck    = 0;
