@@ -6,6 +6,7 @@ import 'package:mqtt_client/mqtt_server_client.dart';
 class MqttService extends ChangeNotifier {
   MqttServerClient? _client;
   bool isConnected = false;
+  bool isDeviceOnline = false;
   final Map<String, dynamic> latestData = {};
   Map<String, dynamic>? uiDescriptor;
 
@@ -34,7 +35,8 @@ class MqttService extends ChangeNotifier {
       notifyListeners();
 
       _client!.subscribe('devices/$deviceToken/telemetry', MqttQos.atLeastOnce);
-      _client!.subscribe('devices/$deviceToken/ui', MqttQos.atLeastOnce);
+      _client!.subscribe('devices/$deviceToken/ui',        MqttQos.atLeastOnce);
+      _client!.subscribe('devices/$deviceToken/status',    MqttQos.atLeastOnce);
 
       _client!.updates?.listen((messages) {
         for (final msg in messages) {
@@ -42,6 +44,11 @@ class MqttService extends ChangeNotifier {
           final payload = MqttPublishPayload.bytesToStringAsString(
             (msg.payload as MqttPublishMessage).payload.message,
           );
+          if (topic.endsWith('/status')) {
+            isDeviceOnline = payload.trim() == 'online';
+            notifyListeners();
+            continue;
+          }
           try {
             final data = jsonDecode(payload) as Map<String, dynamic>;
             if (topic.endsWith('/ui')) {
@@ -66,6 +73,7 @@ class MqttService extends ChangeNotifier {
   Future<void> disconnect() async {
     _client?.disconnect();
     isConnected = false;
+    isDeviceOnline = false;
     latestData.clear();
     uiDescriptor = null;
     notifyListeners();

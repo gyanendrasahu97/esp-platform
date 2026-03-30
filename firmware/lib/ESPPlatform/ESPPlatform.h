@@ -91,6 +91,9 @@ public:
     // true when WiFi + MQTT are both online
     bool isConnected() const;
 
+    // Publish a log message to devices/{token}/logs (also prints to Serial)
+    void log(const String& message);
+
     // Accessible from main.cpp if needed
     String _deviceToken;
     String _backendUrl;

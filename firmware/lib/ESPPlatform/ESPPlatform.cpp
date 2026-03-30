@@ -133,6 +133,7 @@ void ESPPlatform::loop() {
                 _flushBuffer();
                 otaManager.begin(_backendUrl, _deviceToken);
                 if (_rules) _rules->onBoot();
+                log("Device connected — FW " FIRMWARE_VERSION ", IP " + wifiManager.getIP());
             } else if (!wifiManager.isConnected()) {
                 _state = AppState::WIFI_CONNECTING;
             }
@@ -297,6 +298,17 @@ void ESPPlatform::_handlePinCommand(const String& key, JsonVariant value) {
 
 bool ESPPlatform::isConnected() const {
     return mqttClient.isConnected();
+}
+
+void ESPPlatform::log(const String& message) {
+    Serial.printf("[Log] %s\n", message.c_str());
+    if (!mqttClient.isConnected()) return;
+    JsonDocument doc;
+    doc["message"] = message;
+    doc["uptime_ms"] = millis();
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish("devices/" + _deviceToken + "/logs", payload);
 }
 
 // ── Private helpers ────────────────────────────────────────────────────────────

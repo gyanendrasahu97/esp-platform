@@ -39,6 +39,9 @@ class _DeviceScreenState extends State<DeviceScreen> {
         ? UiDescriptor.fromJson(mqtt.uiDescriptor!)
         : device.uiDescriptor;
 
+    // Prefer live MQTT status (instant) — fall back to stale API value while MQTT connects
+    final isOnline = mqtt.isDeviceOnline || device.isOnline;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(device.name),
@@ -48,14 +51,14 @@ class _DeviceScreenState extends State<DeviceScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: (device.isOnline ? Colors.green : Colors.grey).withValues(alpha: 0.2),
+                color: (isOnline ? Colors.green : Colors.grey).withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(Icons.circle, size: 8,
-                  color: device.isOnline ? Colors.green : Colors.grey),
+                  color: isOnline ? Colors.green : Colors.grey),
                 const SizedBox(width: 4),
-                Text(device.isOnline ? 'Online' : 'Offline',
+                Text(isOnline ? 'Online' : 'Offline',
                   style: const TextStyle(fontSize: 12)),
               ]),
             ),
