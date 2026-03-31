@@ -93,6 +93,7 @@ public:
 
     // Publish a log message to devices/{token}/logs (also prints to Serial)
     void log(const String& message);
+    void log(const char* format, ...);
 
     // ── NTP / Clock ────────────────────────────────────────────────────────────
     // Time is synced automatically after WiFi connects.

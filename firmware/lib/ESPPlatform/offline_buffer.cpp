@@ -55,54 +55,57 @@ size_t OfflineBuffer::flush(std::function<bool(const String&)> publishFn) {
     if (!f) return 0;
 
     size_t flushed = 0;
-    size_t failed  = 0;
+    size_t totalInFile = 0;
+    bool stop = false;
 
-    // Read all lines, collect unflushed ones
-    std::vector<String> pending;
+    // We can't easily delete lines from the middle of a file.
+    // Strategy: Read one by one, publish. If successful, we'll later rewrite the file
+    // without the successfully flushed lines.
+    
+    // To keep it simple and safe: read everything to a temporary file EXCEPT the flushed lines.
+    // But even better: Since we have 118KB, let's just use a fixed batch size and stop.
+    
+    File temp = LittleFS.open("/temp_buffer.jsonl", "w");
+    if (!temp) {
+        f.close();
+        return 0;
+    }
+
     while (f.available()) {
         String line = f.readStringUntil('\n');
         line.trim();
         if (line.length() == 0) continue;
-        pending.push_back(line);
+        totalInFile++;
+
+        if (!stop && flushed < OFFLINE_FLUSH_BATCH) {
+            if (publishFn(line)) {
+                flushed++;
+                delay(50); 
+                continue; // Don't write to temp, it's flushed
+            } else {
+                stop = true; // MQTT failed, keep this and all remaining lines
+            }
+        }
+        
+        temp.println(line);
     }
     f.close();
+    temp.close();
 
-    Serial.printf("[Buffer] Flushing %u buffered records...\n", pending.size());
-
-    // Publish in batches
-    for (const String& line : pending) {
-        if (flushed >= OFFLINE_FLUSH_BATCH) {
-            // Leave remaining for next flush cycle
-            break;
-        }
-        if (publishFn(line)) {
-            flushed++;
-        } else {
-            failed++;
-            break;  // MQTT publish failed, stop and retry later
-        }
-        delay(50);  // Small delay between publishes
+    LittleFS.remove(OFFLINE_BUFFER_FILE);
+    if (LittleFS.exists("/temp_buffer.jsonl")) {
+        LittleFS.rename("/temp_buffer.jsonl", OFFLINE_BUFFER_FILE);
+        // Update current size
+        File f2 = LittleFS.open(OFFLINE_BUFFER_FILE, "r");
+        _currentSize = f2.size();
+        f2.close();
+    } else {
+        _currentSize = 0;
     }
 
-    // Rewrite file with unflushed records
-    size_t processed = flushed + failed;
-    if (processed > 0 && failed == 0 && flushed >= pending.size()) {
-        // All flushed - delete file
-        LittleFS.remove(OFFLINE_BUFFER_FILE);
-        _currentSize = 0;
-    } else if (flushed > 0) {
-        // Write back remaining
-        LittleFS.remove(OFFLINE_BUFFER_FILE);
-        File fw = LittleFS.open(OFFLINE_BUFFER_FILE, "w");
-        _currentSize = 0;
-        for (size_t i = flushed; i < pending.size(); i++) {
-            fw.println(pending[i]);
-            _currentSize += pending[i].length() + 1;
-        }
-        fw.close();
-    }
+    if (_currentSize == 0) LittleFS.remove(OFFLINE_BUFFER_FILE);
 
-    Serial.printf("[Buffer] Flushed %u records, %u remaining\n", flushed, pending.size() - flushed);
+    Serial.printf("[Buffer] Flushed %u records, %u remaining\n", flushed, (totalInFile > flushed) ? (totalInFile - flushed) : 0);
     return flushed;
 }
 

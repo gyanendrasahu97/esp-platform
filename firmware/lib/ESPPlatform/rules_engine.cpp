@@ -1,12 +1,13 @@
 #include "rules_engine.h"
 #include "ntp_clock.h"
+#include "ESPPlatform.h"
 #include <Arduino.h>
 
 void RulesEngine::loadRules(const String& json) {
     _rules.clear();
     JsonDocument doc;
     if (deserializeJson(doc, json) != DeserializationError::Ok) {
-        Serial.println("[Rules] JSON parse error");
+        Platform.log("[Rules] JSON parse error");
         return;
     }
     JsonArray arr = doc["rules"].as<JsonArray>();
@@ -169,7 +170,7 @@ void RulesEngine::_executeAction(const RuleAction& action, float triggerValue) {
         if (_publish) _publish(action.key, val);
 
     } else if (action.type == "log") {
-        Serial.printf("[Rule] %s\n", action.msg.c_str());
+        Platform.log("[Rule] %s", action.msg.c_str());
 
     } else if (action.type == "restart") {
         Serial.println("[Rule] Restart triggered");

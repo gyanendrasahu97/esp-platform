@@ -266,7 +266,11 @@ void ESPPlatform::_tickPins() {
                 p.lastReadMs = now;
                 int raw = analogRead(p.pin);
                 // Map 0-4095 → rangeMin-rangeMax
-                float val = p.rangeMin + (raw / 4095.0f) * (p.rangeMax - p.rangeMin);
+                float diff = p.rangeMax - p.rangeMin;
+                float val = p.rangeMin;
+                if (diff != 0) {
+                    val += (raw / 4095.0f) * diff;
+                }
                 val = roundf(val * 10) / 10.0f;  // 1 decimal place
                 if (fabsf(val - p.lastFloat) >= 0.1f) {
                     p.lastFloat = val;
@@ -289,7 +293,11 @@ void ESPPlatform::_handlePinCommand(const String& key, JsonVariant value) {
         } else if (p.mode == PinMode_t::OUTPUT_PWM) {
             float pct = value.as<float>();
             pct = constrain(pct, p.rangeMin, p.rangeMax);
-            int duty = (int)((pct - p.rangeMin) / (p.rangeMax - p.rangeMin) * 255);
+            float diff = p.rangeMax - p.rangeMin;
+            int duty = 0;
+            if (diff != 0) {
+                duty = (int)((pct - p.rangeMin) / diff * 255);
+            }
             analogWrite(p.pin, duty);
             p.lastFloat = pct;
             publish(p.key, pct);
@@ -308,13 +316,30 @@ String ESPPlatform::getIsoTimestamp() const { return ntpClock.getIsoString(); }
 
 void ESPPlatform::log(const String& message) {
     Serial.printf("[Log] %s\n", message.c_str());
-    if (!mqttClient.isConnected()) return;
-    JsonDocument doc;
-    doc["message"] = message;
-    doc["uptime_ms"] = millis();
-    String payload;
-    serializeJson(doc, payload);
-    mqttClient.publish("devices/" + _deviceToken + "/logs", payload);
+    
+    // recursion guard: don't log if we are already in a log call (prevents MQTT loop)
+    static bool _logging = false;
+    if (_logging) return;
+    _logging = true;
+
+    if (mqttClient.isConnected()) {
+        JsonDocument doc;
+        doc["message"] = message;
+        doc["uptime_ms"] = millis();
+        String payload;
+        serializeJson(doc, payload);
+        mqttClient.publish("devices/" + _deviceToken + "/logs", payload);
+    }
+    _logging = false;
+}
+
+void ESPPlatform::log(const char* format, ...) {
+    char buf[256];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buf, sizeof(buf), format, args);
+    va_end(args);
+    log(String(buf));
 }
 
 // ── Private helpers ────────────────────────────────────────────────────────────
@@ -337,7 +362,9 @@ bool ESPPlatform::_publishDoc(JsonDocument& doc) {
 }
 
 bool ESPPlatform::_loadCredentials() {
-    _prefs.begin(NVS_NAMESPACE, true);
+    if (!_prefs.begin(NVS_NAMESPACE, true)) {
+        Serial.println("[NVS] Error: Namespace " NVS_NAMESPACE " not found (initial boot)");
+    }
     _wifiSsid    = _prefs.getString(NVS_KEY_WIFI_SSID,    "");
     _wifiPass    = _prefs.getString(NVS_KEY_WIFI_PASS,    "");
     _mqttHost    = _prefs.getString(NVS_KEY_MQTT_HOST,    "");
@@ -434,10 +461,9 @@ String ESPPlatform::_buildUiJson() const {
 void ESPPlatform::_flushBuffer() {
     if (!offlineBuffer.hasData()) return;
     String topic = "devices/" + _deviceToken + "/telemetry";
-    size_t n = offlineBuffer.flush([&](const String& payload) {
+    offlineBuffer.flush([&](const String& payload) {
         return mqttClient.publish(topic, payload);
     });
-    if (n > 0) Serial.printf("[Buffer] Flushed %u records\n", n);
 }
 
 void ESPPlatform::_onMqttMessage(const String& topic, const String& payload) {

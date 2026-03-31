@@ -1,5 +1,6 @@
 #include "ota_manager.h"
 #include "config.h"
+#include "ESPPlatform.h"
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <Update.h>
@@ -10,7 +11,7 @@ OtaManager otaManager;
 void OtaManager::begin(const String& backendUrl, const String& deviceToken) {
     _backendUrl  = backendUrl;
     _deviceToken = deviceToken;
-    Serial.println("[OTA] OTA manager initialized");
+    Platform.log("[OTA] OTA manager initialized");
 }
 
 void OtaManager::checkAndApply() {
@@ -19,14 +20,14 @@ void OtaManager::checkAndApply() {
     String url = _backendUrl + "/api/ota/" + _deviceToken + "/latest"
                  + "?current_version=" + FIRMWARE_VERSION;
 
-    Serial.printf("[OTA] Checking: %s\n", url.c_str());
+    Platform.log("[OTA] Checking: %s", url.c_str());
 
     HTTPClient http;
     http.begin(url);
     int code = http.GET();
 
     if (code != 200) {
-        Serial.printf("[OTA] Check failed, HTTP %d\n", code);
+        Platform.log("[OTA] Check failed, HTTP %d", code);
         http.end();
         return;
     }
@@ -37,7 +38,7 @@ void OtaManager::checkAndApply() {
 
     bool hasUpdate = doc["has_update"] | false;
     if (!hasUpdate) {
-        Serial.println("[OTA] Firmware is up to date");
+        Platform.log("[OTA] Firmware is up to date");
         return;
     }
 
@@ -45,12 +46,12 @@ void OtaManager::checkAndApply() {
     String downloadUrl = doc["download_url"] | "";
     String checksum    = doc["checksum"]     | "";
 
-    Serial.printf("[OTA] Update available: %s -> %s\n", FIRMWARE_VERSION, newVersion.c_str());
+    Platform.log("[OTA] Update available: %s -> %s", FIRMWARE_VERSION, newVersion.c_str());
     applyFromUrl(downloadUrl, checksum);
 }
 
 void OtaManager::applyFromUrl(const String& url, const String& expectedChecksum) {
-    Serial.printf("[OTA] Downloading firmware from: %s\n", url.c_str());
+    Platform.log("[OTA] Downloading firmware from: %s", url.c_str());
 
     HTTPClient http;
     http.begin(url);
@@ -58,18 +59,18 @@ void OtaManager::applyFromUrl(const String& url, const String& expectedChecksum)
     int code = http.GET();
 
     if (code != 200) {
-        Serial.printf("[OTA] Download failed, HTTP %d\n", code);
+        Platform.log("[OTA] Download failed, HTTP %d", code);
         http.end();
         return;
     }
 
     int contentLength = http.getSize();
     if (contentLength <= 0) {
-        Serial.println("[OTA] Unknown content length, proceeding anyway...");
+        Platform.log("[OTA] Unknown content length, proceeding anyway...");
     }
 
     if (!Update.begin(contentLength > 0 ? contentLength : UPDATE_SIZE_UNKNOWN)) {
-        Serial.printf("[OTA] Update.begin failed: %s\n", Update.errorString());
+        Platform.log("[OTA] Update.begin failed: %s", Update.errorString());
         http.end();
         return;
     }
@@ -78,17 +79,17 @@ void OtaManager::applyFromUrl(const String& url, const String& expectedChecksum)
     size_t written = Update.writeStream(*stream);
     http.end();
 
-    Serial.printf("[OTA] Written: %u bytes\n", written);
+    Platform.log("[OTA] Written: %u bytes", written);
 
     if (Update.end()) {
         if (Update.isFinished()) {
-            Serial.println("[OTA] Update successful! Rebooting...");
+            Platform.log("[OTA] Update successful! Rebooting...");
             delay(1000);
             ESP.restart();
         } else {
-            Serial.println("[OTA] Update not finished - something went wrong");
+            Platform.log("[OTA] Update not finished - something went wrong");
         }
     } else {
-        Serial.printf("[OTA] Update.end error: %s\n", Update.errorString());
+        Platform.log("[OTA] Update.end error: %s", Update.errorString());
     }
 }

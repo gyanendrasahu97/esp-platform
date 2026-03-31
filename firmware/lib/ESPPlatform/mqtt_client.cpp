@@ -1,5 +1,6 @@
 #include "mqtt_client.h"
 #include "config.h"
+#include "ESPPlatform.h"
 #include <PubSubClient.h>
 #include <WiFi.h>
 
@@ -33,7 +34,7 @@ void MqttClient::begin(const String& broker, int port, const String& deviceToken
 }
 
 void MqttClient::_connect() {
-    Serial.printf("[MQTT] Connecting to %s:%d as %s...\n",
+    Platform.log("[MQTT] Connecting to %s:%d as %s...",
                   _broker.c_str(), _port, _deviceToken.substring(0, 8).c_str());
     _state = MqttState::CONNECTING;
 
@@ -53,13 +54,13 @@ void MqttClient::_connect() {
     if (ok) {
         _state = MqttState::CONNECTED;
         _retryDelayMs = MQTT_RECONNECT_BASE_MS;
-        Serial.println("[MQTT] Connected!");
+        Platform.log("[MQTT] Connected!");
 
         // Announce online
         _pubsub.publish(statusTopic.c_str(), "online", true);
         _resubscribe();
     } else {
-        Serial.printf("[MQTT] Failed, rc=%d\n", _pubsub.state());
+        Platform.log("[MQTT] Failed, rc=%d", _pubsub.state());
         _state = MqttState::FAILED;
         _scheduleRetry();
     }
@@ -72,14 +73,14 @@ void MqttClient::_resubscribe() {
     _pubsub.subscribe(commandsTopic.c_str(), 1);
     _pubsub.subscribe(otaTopic.c_str(), 1);
     _pubsub.subscribe(rulesTopic.c_str(), 1);
-    Serial.println("[MQTT] Subscribed to commands + ota + rules topics");
+    Platform.log("[MQTT] Subscribed to commands + ota + rules topics");
 }
 
 void MqttClient::loop() {
     if (_state == MqttState::CONNECTED || _state == MqttState::CONNECTING) {
         if (!_pubsub.connected()) {
             if (_state == MqttState::CONNECTED) {
-                Serial.println("[MQTT] Connection lost");
+                Platform.log("[MQTT] Connection lost");
             }
             _state = MqttState::DISCONNECTED;
             _scheduleRetry();
