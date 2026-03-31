@@ -67,5 +67,8 @@
 #define NTP_SERVER              "pool.ntp.org"
 
 // --- Firmware ---
-#define FIRMWARE_VERSION  "1.0.0"
+#ifndef FIRMWARE_VERSION_ID
+  #define FIRMWARE_VERSION_ID "1.0.0-manual"
+#endif
+#define FIRMWARE_VERSION  FIRMWARE_VERSION_ID
 #define DEVICE_NAME       "ESP Platform Device"

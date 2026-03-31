@@ -72,7 +72,17 @@ async def download_firmware(firmware_id: uuid.UUID, db: AsyncSession = Depends(g
     result = await db.execute(select(Firmware).where(Firmware.id == firmware_id))
     fw = result.scalar_one_or_none()
     if not fw:
-        raise HTTPException(status_code=404, detail="Firmware not found")
+        raise HTTPException(status_code=404, detail="Firmware record not found in database")
+    
+    file_path = Path(fw.file_path)
+    if not file_path.exists():
+        print(f"ERROR: OTA File missing on disk at {fw.file_path}")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Firmware file not found on server storage: {fw.filename}. "
+                   "Check if your /app/firmware_storage volume is correctly mounted in Dokploy!"
+        )
+        
     return FileResponse(fw.file_path, filename=fw.filename, media_type="application/octet-stream")
 
 
